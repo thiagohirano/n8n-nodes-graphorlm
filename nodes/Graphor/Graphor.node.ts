@@ -677,19 +677,13 @@ export class Graphor implements INodeType {
 							uploadData = Buffer.from(binaryData.data, 'base64');
 						}
 
+						const formData = new FormData();
+						formData.append('file', new Blob([uploadData], { type: binaryData.mimeType }), binaryData.fileName || 'file');
+
 						const options: IHttpRequestOptions = {
 							method: 'POST',
 							url: 'https://sources.graphorlm.com/upload',
-							body: {
-								file: {
-									value: uploadData,
-									options: {
-										filename: binaryData.fileName || 'file',
-										contentType: binaryData.mimeType,
-									},
-								},
-							},
-							json: true,
+							body: formData,
 						};
 
 						responseData = await this.helpers.httpRequestWithAuthentication.call(
