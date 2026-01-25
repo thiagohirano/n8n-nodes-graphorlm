@@ -1,0 +1,67 @@
+# Source files (TypeScript)
+nodes/
+credentials/
+*.ts
+!*.d.ts
+tsconfig.json
+
+# Development config
+.eslintrc.js
+.prettierrc
+gulpfile.js
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Git
+.git/
+.gitignore
+
+# Documentation (except README)
+*.md
+!README.md
+graphor.md
+
+# Node modules (npm handles this)
+node_modules/
+
+# Test files
+test/
+tests/
+__tests__/
+*.test.js
+*.test.ts
+*.spec.js
+*.spec.ts
+coverage/
+jest.config.*
+
+# Build artifacts & logs
+*.log
+*.tgz
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Environment & Secrets
+.env
+.env.*
+*.local
+credentials.json
+*.pem
+*.key
+
+# Claude Code
+.claude/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Screenshots
+*.png
