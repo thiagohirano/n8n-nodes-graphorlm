@@ -58,6 +58,30 @@ export class GraphorTool implements INodeType {
 						default: '',
 						description: 'Conversation ID to maintain context across multiple questions',
 					},
+					{
+						displayName: 'Thinking Level',
+						name: 'thinkingLevel',
+						type: 'options',
+						default: 'balanced',
+						options: [
+							{
+								name: 'Fast',
+								value: 'fast',
+								description: 'Uses a faster model without extended thinking. Best for simple questions where speed is prioritized.',
+							},
+							{
+								name: 'Balanced',
+								value: 'balanced',
+								description: 'Default. Uses a more capable model with low thinking. Good balance between quality and speed.',
+							},
+							{
+								name: 'Accurate',
+								value: 'accurate',
+								description: 'Uses a more capable model with high thinking. Best for complex questions requiring deep reasoning.',
+							},
+						],
+						description: 'Controls model and thinking configuration',
+					},
 				],
 			},
 		],
@@ -73,6 +97,7 @@ export class GraphorTool implements INodeType {
 				const options = this.getNodeParameter('options', i) as {
 					fileNames?: string;
 					conversationId?: string;
+					thinkingLevel?: string;
 				};
 
 				const body: IDataObject = {
@@ -84,6 +109,9 @@ export class GraphorTool implements INodeType {
 				}
 				if (options.conversationId) {
 					body.conversation_id = options.conversationId;
+				}
+				if (options.thinkingLevel && options.thinkingLevel !== 'balanced') {
+					body.thinking_level = options.thinkingLevel;
 				}
 
 				const requestOptions: IHttpRequestOptions = {

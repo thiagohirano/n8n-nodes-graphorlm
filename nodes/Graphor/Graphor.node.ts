@@ -137,6 +137,30 @@ export class Graphor implements INodeType {
 						default: '',
 						description: 'JSON Schema to request structured output',
 					},
+					{
+						displayName: 'Thinking Level',
+						name: 'thinkingLevel',
+						type: 'options',
+						default: 'balanced',
+						options: [
+							{
+								name: 'Fast',
+								value: 'fast',
+								description: 'Uses a faster model without extended thinking. Best for simple questions where speed is prioritized.',
+							},
+							{
+								name: 'Balanced',
+								value: 'balanced',
+								description: 'Default. Uses a more capable model with low thinking. Good balance between quality and speed.',
+							},
+							{
+								name: 'Accurate',
+								value: 'accurate',
+								description: 'Uses a more capable model with high thinking. Best for complex questions requiring deep reasoning.',
+							},
+						],
+						description: 'Controls model and thinking configuration',
+					},
 				],
 			},
 
@@ -203,6 +227,36 @@ export class Graphor implements INodeType {
 					},
 				},
 				description: 'JSON Schema defining the structure of the extracted data',
+			},
+			{
+				displayName: 'Thinking Level',
+				name: 'thinkingLevel',
+				type: 'options',
+				default: 'balanced',
+				displayOptions: {
+					show: {
+						resource: ['extraction'],
+						operation: ['extractData'],
+					},
+				},
+				options: [
+					{
+						name: 'Fast',
+						value: 'fast',
+						description: 'Uses a faster model without extended thinking. Best for simple extractions where speed is prioritized.',
+					},
+					{
+						name: 'Balanced',
+						value: 'balanced',
+						description: 'Default. Uses a more capable model with low thinking. Good balance between quality and speed.',
+					},
+					{
+						name: 'Accurate',
+						value: 'accurate',
+						description: 'Uses a more capable model with high thinking. Best for complex extractions requiring deep reasoning.',
+					},
+				],
+				description: 'Controls model and thinking configuration',
 			},
 
 			// ==================== FLOW OPERATIONS ====================
@@ -510,6 +564,7 @@ export class Graphor implements INodeType {
 							fileNames?: string;
 							reset?: boolean;
 							outputSchema?: string;
+							thinkingLevel?: string;
 						};
 
 						const body: IDataObject = {
@@ -527,6 +582,9 @@ export class Graphor implements INodeType {
 						}
 						if (additionalFields.outputSchema) {
 							body.output_schema = JSON.parse(additionalFields.outputSchema);
+						}
+						if (additionalFields.thinkingLevel && additionalFields.thinkingLevel !== 'balanced') {
+							body.thinking_level = additionalFields.thinkingLevel;
 						}
 
 						const options: IHttpRequestOptions = {
@@ -550,12 +608,17 @@ export class Graphor implements INodeType {
 						const fileNames = this.getNodeParameter('fileNames', i) as string;
 						const userInstruction = this.getNodeParameter('userInstruction', i) as string;
 						const outputSchema = this.getNodeParameter('outputSchema', i) as string;
+						const thinkingLevel = this.getNodeParameter('thinkingLevel', i) as string;
 
 						const body: IDataObject = {
 							file_names: fileNames.split(',').map((f) => f.trim()),
 							user_instruction: userInstruction,
 							output_schema: JSON.parse(outputSchema),
 						};
+
+						if (thinkingLevel && thinkingLevel !== 'balanced') {
+							body.thinking_level = thinkingLevel;
+						}
 
 						const options: IHttpRequestOptions = {
 							method: 'POST',
