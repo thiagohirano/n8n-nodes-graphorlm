@@ -8,6 +8,7 @@ import {
 export class GraphorApi implements ICredentialType {
 	name = 'graphorApi';
 	displayName = 'Graphor API';
+	icon = 'file:graphor.svg' as const;
 	documentationUrl = 'https://docs.graphorlm.com/guides/api-tokens';
 	properties: INodeProperties[] = [
 		{
