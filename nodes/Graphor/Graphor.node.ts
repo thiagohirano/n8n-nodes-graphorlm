@@ -117,11 +117,18 @@ export class Graphor implements INodeType {
 						description: 'Conversation identifier to maintain memory context across questions',
 					},
 					{
-						displayName: 'File Names',
+						displayName: 'File IDs',
+						name: 'fileIds',
+						type: 'string',
+						default: '',
+						description: 'Comma-separated list of file IDs to restrict search to specific documents',
+					},
+					{
+						displayName: 'File Names (Deprecated)',
 						name: 'fileNames',
 						type: 'string',
 						default: '',
-						description: 'Comma-separated list of file names to restrict search to specific documents',
+						description: 'Comma-separated list of file names. Deprecated: use File IDs instead.',
 					},
 					{
 						displayName: 'Reset Conversation',
@@ -187,10 +194,9 @@ export class Graphor implements INodeType {
 			},
 			// Extraction - Extract Data fields
 			{
-				displayName: 'File Names',
-				name: 'fileNames',
+				displayName: 'File IDs',
+				name: 'fileIds',
 				type: 'string',
-				required: true,
 				default: '',
 				displayOptions: {
 					show: {
@@ -198,7 +204,20 @@ export class Graphor implements INodeType {
 						operation: ['extractData'],
 					},
 				},
-				description: 'Comma-separated list of file names to extract from',
+				description: 'Comma-separated list of file IDs to extract from',
+			},
+			{
+				displayName: 'File Names (Deprecated)',
+				name: 'fileNames',
+				type: 'string',
+				default: '',
+				displayOptions: {
+					show: {
+						resource: ['extraction'],
+						operation: ['extractData'],
+					},
+				},
+				description: 'Comma-separated list of file names to extract from. Deprecated: use File IDs instead.',
 			},
 			{
 				displayName: 'User Instruction',
@@ -278,6 +297,12 @@ export class Graphor implements INodeType {
 						action: 'Deploy a flow',
 					},
 					{
+						name: 'Get Chunking Nodes',
+						value: 'getChunkingNodes',
+						description: 'Get chunking node configurations from a flow',
+						action: 'Get chunking nodes from a flow',
+					},
+					{
 						name: 'List',
 						value: 'list',
 						description: 'List all flows in your project',
@@ -292,7 +317,7 @@ export class Graphor implements INodeType {
 				],
 				default: 'run',
 			},
-			// Flow - Run fields
+			// Flow - Run/Deploy/GetChunkingNodes fields
 			{
 				displayName: 'Flow Name',
 				name: 'flowName',
@@ -302,10 +327,10 @@ export class Graphor implements INodeType {
 				displayOptions: {
 					show: {
 						resource: ['flow'],
-						operation: ['run', 'deploy'],
+						operation: ['run', 'deploy', 'getChunkingNodes'],
 					},
 				},
-				description: 'The name of the flow to execute',
+				description: 'The name of the flow',
 			},
 			{
 				displayName: 'Query',
@@ -561,6 +586,7 @@ export class Graphor implements INodeType {
 						const question = this.getNodeParameter('question', i) as string;
 						const additionalFields = this.getNodeParameter('additionalFields', i) as {
 							conversationId?: string;
+							fileIds?: string;
 							fileNames?: string;
 							reset?: boolean;
 							outputSchema?: string;
@@ -574,6 +600,9 @@ export class Graphor implements INodeType {
 						if (additionalFields.conversationId) {
 							body.conversation_id = additionalFields.conversationId;
 						}
+						if (additionalFields.fileIds) {
+							body.file_ids = additionalFields.fileIds.split(',').map((f) => f.trim());
+						}
 						if (additionalFields.fileNames) {
 							body.file_names = additionalFields.fileNames.split(',').map((f) => f.trim());
 						}
@@ -583,7 +612,7 @@ export class Graphor implements INodeType {
 						if (additionalFields.outputSchema) {
 							body.output_schema = JSON.parse(additionalFields.outputSchema);
 						}
-						if (additionalFields.thinkingLevel && additionalFields.thinkingLevel !== 'balanced') {
+						if (additionalFields.thinkingLevel) {
 							body.thinking_level = additionalFields.thinkingLevel;
 						}
 
@@ -605,18 +634,24 @@ export class Graphor implements INodeType {
 				// ==================== EXTRACTION ====================
 				if (resource === 'extraction') {
 					if (operation === 'extractData') {
+						const fileIds = this.getNodeParameter('fileIds', i) as string;
 						const fileNames = this.getNodeParameter('fileNames', i) as string;
 						const userInstruction = this.getNodeParameter('userInstruction', i) as string;
 						const outputSchema = this.getNodeParameter('outputSchema', i) as string;
 						const thinkingLevel = this.getNodeParameter('thinkingLevel', i) as string;
 
 						const body: IDataObject = {
-							file_names: fileNames.split(',').map((f) => f.trim()),
 							user_instruction: userInstruction,
 							output_schema: JSON.parse(outputSchema),
 						};
 
-						if (thinkingLevel && thinkingLevel !== 'balanced') {
+						if (fileIds) {
+							body.file_ids = fileIds.split(',').map((f) => f.trim());
+						}
+						if (fileNames) {
+							body.file_names = fileNames.split(',').map((f) => f.trim());
+						}
+						if (thinkingLevel) {
 							body.thinking_level = thinkingLevel;
 						}
 
@@ -699,6 +734,22 @@ export class Graphor implements INodeType {
 							method: 'POST',
 							url: `https://${flowName}.flows.graphorlm.com/deploy`,
 							body,
+							json: true,
+						};
+
+						responseData = await this.helpers.httpRequestWithAuthentication.call(
+							this,
+							'graphorApi',
+							options,
+						);
+					}
+
+					if (operation === 'getChunkingNodes') {
+						const flowName = this.getNodeParameter('flowName', i) as string;
+
+						const options: IHttpRequestOptions = {
+							method: 'GET',
+							url: `https://${flowName}.flows.graphorlm.com/chunking`,
 							json: true,
 						};
 

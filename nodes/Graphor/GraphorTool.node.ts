@@ -45,11 +45,18 @@ export class GraphorTool implements INodeType {
 				default: {},
 				options: [
 					{
-						displayName: 'File Names',
+						displayName: 'File IDs',
+						name: 'fileIds',
+						type: 'string',
+						default: '',
+						description: 'Comma-separated list of file IDs to search within (leave empty to search all)',
+					},
+					{
+						displayName: 'File Names (Deprecated)',
 						name: 'fileNames',
 						type: 'string',
 						default: '',
-						description: 'Comma-separated list of file names to search within (leave empty to search all)',
+						description: 'Comma-separated list of file names. Deprecated: use File IDs instead.',
 					},
 					{
 						displayName: 'Conversation ID',
@@ -95,6 +102,7 @@ export class GraphorTool implements INodeType {
 			try {
 				const question = this.getNodeParameter('question', i) as string;
 				const options = this.getNodeParameter('options', i) as {
+					fileIds?: string;
 					fileNames?: string;
 					conversationId?: string;
 					thinkingLevel?: string;
@@ -104,13 +112,16 @@ export class GraphorTool implements INodeType {
 					question,
 				};
 
+				if (options.fileIds) {
+					body.file_ids = options.fileIds.split(',').map((f) => f.trim());
+				}
 				if (options.fileNames) {
 					body.file_names = options.fileNames.split(',').map((f) => f.trim());
 				}
 				if (options.conversationId) {
 					body.conversation_id = options.conversationId;
 				}
-				if (options.thinkingLevel && options.thinkingLevel !== 'balanced') {
+				if (options.thinkingLevel) {
 					body.thinking_level = options.thinkingLevel;
 				}
 
