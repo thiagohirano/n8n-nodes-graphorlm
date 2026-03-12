@@ -47,11 +47,6 @@ export class Graphor implements INodeType {
 						description: 'Extract structured data from documents',
 					},
 					{
-						name: 'Flow',
-						value: 'flow',
-						description: 'Manage and run RAG flows',
-					},
-					{
 						name: 'Source',
 						value: 'source',
 						description: 'Manage document sources',
@@ -278,117 +273,6 @@ export class Graphor implements INodeType {
 				description: 'Controls model and thinking configuration',
 			},
 
-			// ==================== FLOW OPERATIONS ====================
-			{
-				displayName: 'Operation',
-				name: 'operation',
-				type: 'options',
-				noDataExpression: true,
-				displayOptions: {
-					show: {
-						resource: ['flow'],
-					},
-				},
-				options: [
-					{
-						name: 'Deploy',
-						value: 'deploy',
-						description: 'Deploy a flow to make it accessible via API',
-						action: 'Deploy a flow',
-					},
-					{
-						name: 'Get Chunking Nodes',
-						value: 'getChunkingNodes',
-						description: 'Get chunking node configurations from a flow',
-						action: 'Get chunking nodes from a flow',
-					},
-					{
-						name: 'List',
-						value: 'list',
-						description: 'List all flows in your project',
-						action: 'List all flows',
-					},
-					{
-						name: 'Run',
-						value: 'run',
-						description: 'Execute a deployed flow with a query',
-						action: 'Run a flow',
-					},
-				],
-				default: 'run',
-			},
-			// Flow - Run/Deploy/GetChunkingNodes fields
-			{
-				displayName: 'Flow Name',
-				name: 'flowName',
-				type: 'string',
-				required: true,
-				default: '',
-				displayOptions: {
-					show: {
-						resource: ['flow'],
-						operation: ['run', 'deploy', 'getChunkingNodes'],
-					},
-				},
-				description: 'The name of the flow',
-			},
-			{
-				displayName: 'Query',
-				name: 'query',
-				type: 'string',
-				default: '',
-				displayOptions: {
-					show: {
-						resource: ['flow'],
-						operation: ['run'],
-					},
-				},
-				description: 'The query or question to process through the flow',
-			},
-			{
-				displayName: 'Additional Fields',
-				name: 'additionalFieldsFlow',
-				type: 'collection',
-				placeholder: 'Add Field',
-				default: {},
-				displayOptions: {
-					show: {
-						resource: ['flow'],
-						operation: ['run'],
-					},
-				},
-				options: [
-					{
-						displayName: 'Page',
-						name: 'page',
-						type: 'number',
-						default: 1,
-						description: 'Page number for paginated results',
-					},
-					{
-						displayName: 'Page Size',
-						name: 'pageSize',
-						type: 'number',
-						default: 10,
-						description: 'Number of items per page',
-					},
-				],
-			},
-			// Flow - Deploy fields
-			{
-				displayName: 'Tool Description',
-				name: 'toolDescription',
-				type: 'string',
-				default: '',
-				displayOptions: {
-					show: {
-						resource: ['flow'],
-						operation: ['deploy'],
-					},
-				},
-				description: 'Custom description for the deployed flow (used in tool definitions)',
-			},
-
 			// ==================== SOURCE OPERATIONS ====================
 			{
 				displayName: 'Operation',
@@ -443,12 +327,6 @@ export class Graphor implements INodeType {
 						description: 'Upload content from a web page URL',
 						action: 'Upload from URL',
 					},
-					{
-						name: 'Upload From YouTube',
-						value: 'uploadYoutube',
-						description: 'Upload content from a YouTube video',
-						action: 'Upload from You Tube',
-					},
 				],
 				default: 'list',
 			},
@@ -496,21 +374,6 @@ export class Graphor implements INodeType {
 					},
 				},
 				description: 'The public GitHub repository URL',
-			},
-			// Source - Upload YouTube fields
-			{
-				displayName: 'YouTube URL',
-				name: 'youtubeUrl',
-				type: 'string',
-				required: true,
-				default: '',
-				displayOptions: {
-					show: {
-						resource: ['source'],
-						operation: ['uploadYoutube'],
-					},
-				},
-				description: 'The public YouTube video URL',
 			},
 			// Source - Process fields
 			{
@@ -670,97 +533,6 @@ export class Graphor implements INodeType {
 					}
 				}
 
-				// ==================== FLOW ====================
-				if (resource === 'flow') {
-					if (operation === 'list') {
-						const options: IHttpRequestOptions = {
-							method: 'GET',
-							url: 'https://flows.graphorlm.com',
-							json: true,
-						};
-
-						responseData = await this.helpers.httpRequestWithAuthentication.call(
-							this,
-							'graphorApi',
-							options,
-						);
-					}
-
-					if (operation === 'run') {
-						const flowName = this.getNodeParameter('flowName', i) as string;
-						const query = this.getNodeParameter('query', i) as string;
-						const additionalFields = this.getNodeParameter('additionalFieldsFlow', i) as {
-							page?: number;
-							pageSize?: number;
-						};
-
-						const body: IDataObject = {};
-
-						if (query) {
-							body.query = query;
-						}
-						if (additionalFields.page) {
-							body.page = additionalFields.page;
-						}
-						if (additionalFields.pageSize) {
-							body.page_size = additionalFields.pageSize;
-						}
-
-						const options: IHttpRequestOptions = {
-							method: 'POST',
-							url: `https://${flowName}.flows.graphorlm.com`,
-							body,
-							json: true,
-						};
-
-						responseData = await this.helpers.httpRequestWithAuthentication.call(
-							this,
-							'graphorApi',
-							options,
-						);
-					}
-
-					if (operation === 'deploy') {
-						const flowName = this.getNodeParameter('flowName', i) as string;
-						const toolDescription = this.getNodeParameter('toolDescription', i) as string;
-
-						const body: IDataObject = {};
-
-						if (toolDescription) {
-							body.tool_description = toolDescription;
-						}
-
-						const options: IHttpRequestOptions = {
-							method: 'POST',
-							url: `https://${flowName}.flows.graphorlm.com/deploy`,
-							body,
-							json: true,
-						};
-
-						responseData = await this.helpers.httpRequestWithAuthentication.call(
-							this,
-							'graphorApi',
-							options,
-						);
-					}
-
-					if (operation === 'getChunkingNodes') {
-						const flowName = this.getNodeParameter('flowName', i) as string;
-
-						const options: IHttpRequestOptions = {
-							method: 'GET',
-							url: `https://${flowName}.flows.graphorlm.com/chunking`,
-							json: true,
-						};
-
-						responseData = await this.helpers.httpRequestWithAuthentication.call(
-							this,
-							'graphorApi',
-							options,
-						);
-					}
-				}
-
 				// ==================== SOURCE ====================
 				if (resource === 'source') {
 					if (operation === 'list') {
@@ -831,23 +603,6 @@ export class Graphor implements INodeType {
 							method: 'POST',
 							url: 'https://sources.graphorlm.com/upload-github-source',
 							body: { url: githubUrl },
-							json: true,
-						};
-
-						responseData = await this.helpers.httpRequestWithAuthentication.call(
-							this,
-							'graphorApi',
-							options,
-						);
-					}
-
-					if (operation === 'uploadYoutube') {
-						const youtubeUrl = this.getNodeParameter('youtubeUrl', i) as string;
-
-						const options: IHttpRequestOptions = {
-							method: 'POST',
-							url: 'https://sources.graphorlm.com/upload-youtube-source',
-							body: { url: youtubeUrl },
 							json: true,
 						};
 

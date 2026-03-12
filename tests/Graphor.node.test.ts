@@ -15,11 +15,11 @@ describe('Graphor Node', () => {
 			expect(node.description.credentials).toEqual([{ name: 'graphorApi', required: true }]);
 		});
 
-		it('should define all four resources', () => {
+		it('should define three resources', () => {
 			const resourceProp = node.description.properties.find((p) => p.name === 'resource');
 			expect(resourceProp).toBeDefined();
 			const values = (resourceProp!.options as { value: string }[]).map((o) => o.value);
-			expect(values).toEqual(['chat', 'extraction', 'flow', 'source']);
+			expect(values).toEqual(['chat', 'extraction', 'source']);
 		});
 
 		it('should have file_ids fields for chat', () => {
@@ -40,20 +40,18 @@ describe('Graphor Node', () => {
 			expect(fileIdsProp).toBeDefined();
 		});
 
-		it('should have getChunkingNodes operation for flow', () => {
-			const flowOps = node.description.properties.find(
-				(p) => p.name === 'operation' && p.displayOptions?.show?.resource?.[0] === 'flow',
-			);
-			const values = (flowOps!.options as { value: string }[]).map((o) => o.value);
-			expect(values).toContain('getChunkingNodes');
-			expect(values).toContain('deploy');
-			expect(values).toContain('list');
-			expect(values).toContain('run');
+		it('should not have flow resource', () => {
+			const resourceProp = node.description.properties.find((p) => p.name === 'resource');
+			const values = (resourceProp!.options as { value: string }[]).map((o) => o.value);
+			expect(values).not.toContain('flow');
 		});
 
-		it('should show flowName field for getChunkingNodes operation', () => {
-			const flowNameProp = node.description.properties.find((p) => p.name === 'flowName');
-			expect(flowNameProp!.displayOptions!.show!.operation).toContain('getChunkingNodes');
+		it('should not have youtube upload operation', () => {
+			const sourceOps = node.description.properties.find(
+				(p) => p.name === 'operation' && p.displayOptions?.show?.resource?.[0] === 'source',
+			);
+			const values = (sourceOps!.options as { value: string }[]).map((o) => o.value);
+			expect(values).not.toContain('uploadYoutube');
 		});
 	});
 
@@ -289,109 +287,6 @@ describe('Graphor Node', () => {
 		});
 	});
 
-	describe('Flow - List', () => {
-		it('should GET flows list', async () => {
-			const mockCtx = createMockExecuteFunctions({
-				nodeParameters: {
-					resource: 'flow',
-					operation: 'list',
-				},
-				httpResponse: { flows: [], total: 0 },
-			});
-
-			await node.execute.call(mockCtx as any);
-			const requests = mockCtx.getRequests();
-
-			expect(requests[0].options.method).toBe('GET');
-			expect(requests[0].options.url).toBe('https://flows.graphorlm.com');
-		});
-	});
-
-	describe('Flow - Run', () => {
-		it('should POST to flow-specific URL', async () => {
-			const mockCtx = createMockExecuteFunctions({
-				nodeParameters: {
-					resource: 'flow',
-					operation: 'run',
-					flowName: 'my-flow',
-					query: 'What is this?',
-					additionalFieldsFlow: { page: 2, pageSize: 20 },
-				},
-			});
-
-			await node.execute.call(mockCtx as any);
-			const req = mockCtx.getRequests()[0];
-
-			expect(req.options.method).toBe('POST');
-			expect(req.options.url).toBe('https://my-flow.flows.graphorlm.com');
-			const body = req.options.body as any;
-			expect(body.query).toBe('What is this?');
-			expect(body.page).toBe(2);
-			expect(body.page_size).toBe(20);
-		});
-	});
-
-	describe('Flow - Deploy', () => {
-		it('should POST deploy with tool_description', async () => {
-			const mockCtx = createMockExecuteFunctions({
-				nodeParameters: {
-					resource: 'flow',
-					operation: 'deploy',
-					flowName: 'my-flow',
-					toolDescription: 'A helpful flow',
-				},
-			});
-
-			await node.execute.call(mockCtx as any);
-			const req = mockCtx.getRequests()[0];
-
-			expect(req.options.method).toBe('POST');
-			expect(req.options.url).toBe('https://my-flow.flows.graphorlm.com/deploy');
-			expect((req.options.body as any).tool_description).toBe('A helpful flow');
-		});
-
-		it('should deploy without tool_description', async () => {
-			const mockCtx = createMockExecuteFunctions({
-				nodeParameters: {
-					resource: 'flow',
-					operation: 'deploy',
-					flowName: 'my-flow',
-					toolDescription: '',
-				},
-			});
-
-			await node.execute.call(mockCtx as any);
-			const body = mockCtx.getRequests()[0].options.body as any;
-			expect(body.tool_description).toBeUndefined();
-		});
-	});
-
-	describe('Flow - Get Chunking Nodes', () => {
-		it('should GET chunking nodes from flow', async () => {
-			const mockCtx = createMockExecuteFunctions({
-				nodeParameters: {
-					resource: 'flow',
-					operation: 'getChunkingNodes',
-					flowName: 'my-flow',
-				},
-				httpResponse: [
-					{
-						id: 'chunk-1',
-						type: 'chunking',
-						data: { name: 'Chunker', config: { chunkSize: 512 } },
-					},
-				],
-			});
-
-			await node.execute.call(mockCtx as any);
-			const req = mockCtx.getRequests()[0];
-
-			expect(req.options.method).toBe('GET');
-			expect(req.options.url).toBe('https://my-flow.flows.graphorlm.com/chunking');
-			expect(req.credentialType).toBe('graphorApi');
-		});
-	});
-
 	describe('Source - List', () => {
 		it('should GET sources list', async () => {
 			const mockCtx = createMockExecuteFunctions({
@@ -439,23 +334,6 @@ describe('Graphor Node', () => {
 			const req = mockCtx.getRequests()[0];
 			expect(req.options.url).toBe('https://sources.graphorlm.com/upload-github-source');
 			expect((req.options.body as any).url).toBe('https://github.com/user/repo');
-		});
-	});
-
-	describe('Source - Upload YouTube', () => {
-		it('should POST youtube url to /upload-youtube-source', async () => {
-			const mockCtx = createMockExecuteFunctions({
-				nodeParameters: {
-					resource: 'source',
-					operation: 'uploadYoutube',
-					youtubeUrl: 'https://youtube.com/watch?v=abc',
-				},
-			});
-
-			await node.execute.call(mockCtx as any);
-			const req = mockCtx.getRequests()[0];
-			expect(req.options.url).toBe('https://sources.graphorlm.com/upload-youtube-source');
-			expect((req.options.body as any).url).toBe('https://youtube.com/watch?v=abc');
 		});
 	});
 

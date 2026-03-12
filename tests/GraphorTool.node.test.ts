@@ -1,5 +1,5 @@
 import { GraphorTool } from '../nodes/Graphor/GraphorTool.node';
-import { createMockExecuteFunctions } from './helpers';
+import { NodeConnectionTypes } from 'n8n-workflow';
 
 describe('GraphorTool Node', () => {
 	let node: GraphorTool;
@@ -12,118 +12,177 @@ describe('GraphorTool Node', () => {
 		it('should have correct basic properties', () => {
 			expect(node.description.name).toBe('graphorTool');
 			expect(node.description.displayName).toBe('Graphor Tool');
-			expect(node.description.usableAsTool).toBe(true);
 		});
 
-		it('should have fileIds option', () => {
+		it('should be an AI tool node (not a regular node)', () => {
+			expect(node.description.inputs).toEqual([]);
+			expect(node.description.outputs).toEqual([NodeConnectionTypes.AiTool]);
+			expect(node.description.outputNames).toEqual(['Tool']);
+			expect((node.description as any).usableAsTool).toBeUndefined();
+		});
+
+		it('should have AI codex category', () => {
+			expect(node.description.codex).toEqual({
+				categories: ['AI'],
+				subcategories: {
+					AI: ['Tools'],
+				},
+			});
+		});
+
+		it('should have toolDescription property', () => {
+			const toolDescProp = node.description.properties.find((p) => p.name === 'toolDescription');
+			expect(toolDescProp).toBeDefined();
+			expect(toolDescProp!.type).toBe('string');
+			expect(toolDescProp!.default).toBeTruthy();
+		});
+
+		it('should have fileIds and fileNames options', () => {
 			const optionsProp = node.description.properties.find((p) => p.name === 'options');
 			const options = optionsProp!.options as { name: string }[];
 			const names = options.map((o) => o.name);
 			expect(names).toContain('fileIds');
 			expect(names).toContain('fileNames');
+			expect(names).toContain('conversationId');
+			expect(names).toContain('thinkingLevel');
+		});
+
+		it('should not have question as a node property (AI passes it)', () => {
+			const questionProp = node.description.properties.find((p) => p.name === 'question');
+			expect(questionProp).toBeUndefined();
 		});
 	});
 
-	describe('execute', () => {
-		it('should send question to /ask-sources', async () => {
-			const mockCtx = createMockExecuteFunctions({
-				nodeParameters: {
-					question: 'What does the document say?',
-					options: {},
-				},
-				httpResponse: { answer: 'It says...' },
-			});
-
-			const result = await node.execute.call(mockCtx as any);
-			const req = mockCtx.getRequests()[0];
-
-			expect(req.options.method).toBe('POST');
-			expect(req.options.url).toBe('https://sources.graphorlm.com/ask-sources');
-			expect((req.options.body as any).question).toBe('What does the document say?');
-			expect(result[0]).toHaveLength(1);
+	describe('supplyData', () => {
+		it('should implement supplyData method', () => {
+			expect(typeof node.supplyData).toBe('function');
 		});
 
-		it('should always send thinking_level when provided', async () => {
-			const mockCtx = createMockExecuteFunctions({
-				nodeParameters: {
-					question: 'test',
-					options: { thinkingLevel: 'balanced' },
-				},
-			});
+		it('should return a DynamicTool that calls /ask-sources', async () => {
+			const requests: { credentialType: string; options: any }[] = [];
 
-			await node.execute.call(mockCtx as any);
-			const body = mockCtx.getRequests()[0].options.body as any;
+			const mockCtx = {
+				getNodeParameter: (name: string, _itemIndex: number) => {
+					const params: Record<string, unknown> = {
+						toolDescription: 'Ask about documents',
+						options: { thinkingLevel: 'balanced' },
+					};
+					return params[name];
+				},
+				helpers: {
+					httpRequestWithAuthentication: {
+						call: async (_self: unknown, credentialType: string, options: any) => {
+							requests.push({ credentialType, options });
+							return { answer: 'The document says...', conversation_id: 'c1' };
+						},
+					},
+				},
+			};
+
+			const result = await node.supplyData!.call(mockCtx as any, 0);
+			expect(result.response).toBeDefined();
+
+			const tool = result.response as any;
+			expect(tool.name).toBe('graphor_ask');
+			expect(tool.description).toBe('Ask about documents');
+
+			// Invoke the tool with a question
+			const output = await tool.func('What is in the document?');
+
+			expect(requests).toHaveLength(1);
+			expect(requests[0].credentialType).toBe('graphorApi');
+			expect(requests[0].options.method).toBe('POST');
+			expect(requests[0].options.url).toBe('https://sources.graphorlm.com/ask-sources');
+
+			const body = requests[0].options.body;
+			expect(body.question).toBe('What is in the document?');
 			expect(body.thinking_level).toBe('balanced');
+
+			// Tool should return stringified JSON
+			const parsed = JSON.parse(output);
+			expect(parsed.answer).toBe('The document says...');
 		});
 
-		it('should send file_ids when provided', async () => {
-			const mockCtx = createMockExecuteFunctions({
-				nodeParameters: {
-					question: 'test',
-					options: { fileIds: 'id-1, id-2' },
-				},
-			});
+		it('should send file_ids when configured', async () => {
+			const requests: any[] = [];
 
-			await node.execute.call(mockCtx as any);
-			const body = mockCtx.getRequests()[0].options.body as any;
+			const mockCtx = {
+				getNodeParameter: (name: string) => {
+					const params: Record<string, unknown> = {
+						toolDescription: 'test',
+						options: { fileIds: 'id-1, id-2' },
+					};
+					return params[name];
+				},
+				helpers: {
+					httpRequestWithAuthentication: {
+						call: async (_self: unknown, _cred: string, options: any) => {
+							requests.push(options);
+							return {};
+						},
+					},
+				},
+			};
+
+			const result = await node.supplyData!.call(mockCtx as any, 0);
+			await (result.response as any).func('test question');
+
+			const body = requests[0].body;
 			expect(body.file_ids).toEqual(['id-1', 'id-2']);
 		});
 
-		it('should send file_names when provided (deprecated)', async () => {
-			const mockCtx = createMockExecuteFunctions({
-				nodeParameters: {
-					question: 'test',
-					options: { fileNames: 'doc.pdf' },
+		it('should send conversation_id when configured', async () => {
+			const requests: any[] = [];
+
+			const mockCtx = {
+				getNodeParameter: (name: string) => {
+					const params: Record<string, unknown> = {
+						toolDescription: 'test',
+						options: { conversationId: 'conv-abc' },
+					};
+					return params[name];
 				},
-			});
-
-			await node.execute.call(mockCtx as any);
-			const body = mockCtx.getRequests()[0].options.body as any;
-			expect(body.file_names).toEqual(['doc.pdf']);
-		});
-
-		it('should send conversation_id when provided', async () => {
-			const mockCtx = createMockExecuteFunctions({
-				nodeParameters: {
-					question: 'follow up',
-					options: { conversationId: 'conv-abc' },
+				helpers: {
+					httpRequestWithAuthentication: {
+						call: async (_self: unknown, _cred: string, options: any) => {
+							requests.push(options);
+							return {};
+						},
+					},
 				},
-			});
-
-			await node.execute.call(mockCtx as any);
-			const body = mockCtx.getRequests()[0].options.body as any;
-			expect(body.conversation_id).toBe('conv-abc');
-		});
-
-		it('should not send optional fields when empty', async () => {
-			const mockCtx = createMockExecuteFunctions({
-				nodeParameters: {
-					question: 'test',
-					options: {},
-				},
-			});
-
-			await node.execute.call(mockCtx as any);
-			const body = mockCtx.getRequests()[0].options.body as any;
-			expect(body).toEqual({ question: 'test' });
-		});
-
-		it('should handle errors with continueOnFail', async () => {
-			const mockCtx = createMockExecuteFunctions({
-				nodeParameters: {
-					question: 'test',
-					options: {},
-				},
-				continueOnFail: true,
-			});
-
-			// Override httpRequest to throw
-			mockCtx.helpers.httpRequestWithAuthentication.call = async () => {
-				throw new Error('API error');
 			};
 
-			const result = await node.execute.call(mockCtx as any);
-			expect(result[0][0].json.error).toBe('API error');
+			const result = await node.supplyData!.call(mockCtx as any, 0);
+			await (result.response as any).func('test');
+
+			expect(requests[0].body.conversation_id).toBe('conv-abc');
+		});
+
+		it('should not include empty optional fields', async () => {
+			const requests: any[] = [];
+
+			const mockCtx = {
+				getNodeParameter: (name: string) => {
+					const params: Record<string, unknown> = {
+						toolDescription: 'test',
+						options: {},
+					};
+					return params[name];
+				},
+				helpers: {
+					httpRequestWithAuthentication: {
+						call: async (_self: unknown, _cred: string, options: any) => {
+							requests.push(options);
+							return {};
+						},
+					},
+				},
+			};
+
+			const result = await node.supplyData!.call(mockCtx as any, 0);
+			await (result.response as any).func('just a question');
+
+			expect(requests[0].body).toEqual({ question: 'just a question' });
 		});
 	});
 });

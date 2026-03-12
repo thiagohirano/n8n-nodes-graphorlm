@@ -1,12 +1,13 @@
 import {
-	IExecuteFunctions,
-	INodeExecutionData,
-	INodeType,
-	INodeTypeDescription,
-	NodeOperationError,
-	IDataObject,
-	IHttpRequestOptions,
+	NodeConnectionTypes,
+	type INodeType,
+	type INodeTypeDescription,
+	type ISupplyDataFunctions,
+	type SupplyData,
+	type IDataObject,
+	type IHttpRequestOptions,
 } from 'n8n-workflow';
+import { DynamicTool } from '@langchain/core/tools';
 
 export class GraphorTool implements INodeType {
 	description: INodeTypeDescription = {
@@ -19,9 +20,15 @@ export class GraphorTool implements INodeType {
 		defaults: {
 			name: 'Ask Graphor',
 		},
-		inputs: ['main'],
-		outputs: ['main'],
-		usableAsTool: true,
+		codex: {
+			categories: ['AI'],
+			subcategories: {
+				AI: ['Tools'],
+			},
+		},
+		inputs: [],
+		outputs: [NodeConnectionTypes.AiTool],
+		outputNames: ['Tool'],
 		credentials: [
 			{
 				name: 'graphorApi',
@@ -30,12 +37,14 @@ export class GraphorTool implements INodeType {
 		],
 		properties: [
 			{
-				displayName: 'Question',
-				name: 'question',
+				displayName: 'Tool Description',
+				name: 'toolDescription',
 				type: 'string',
-				required: true,
-				default: '',
-				description: 'The question to ask about your documents',
+				default: 'Ask questions about documents using Graphor AI. Send a question and get answers based on your uploaded documents.',
+				typeOptions: {
+					rows: 3,
+				},
+				description: 'Description of this tool that helps the AI Agent understand when and how to use it',
 			},
 			{
 				displayName: 'Options',
@@ -94,23 +103,22 @@ export class GraphorTool implements INodeType {
 		],
 	};
 
-	async execute(this: IExecuteFunctions): Promise<INodeExecutionData[][]> {
-		const items = this.getInputData();
-		const returnData: INodeExecutionData[] = [];
+	async supplyData(this: ISupplyDataFunctions, itemIndex: number): Promise<SupplyData> {
+		const toolDescription = this.getNodeParameter('toolDescription', itemIndex) as string;
+		const options = this.getNodeParameter('options', itemIndex) as {
+			fileIds?: string;
+			fileNames?: string;
+			conversationId?: string;
+			thinkingLevel?: string;
+		};
 
-		for (let i = 0; i < items.length; i++) {
-			try {
-				const question = this.getNodeParameter('question', i) as string;
-				const options = this.getNodeParameter('options', i) as {
-					fileIds?: string;
-					fileNames?: string;
-					conversationId?: string;
-					thinkingLevel?: string;
-				};
+		const self = this;
 
-				const body: IDataObject = {
-					question,
-				};
+		const tool = new DynamicTool({
+			name: 'graphor_ask',
+			description: toolDescription,
+			func: async (question: string) => {
+				const body: IDataObject = { question };
 
 				if (options.fileIds) {
 					body.file_ids = options.fileIds.split(',').map((f) => f.trim());
@@ -132,33 +140,16 @@ export class GraphorTool implements INodeType {
 					json: true,
 				};
 
-				const responseData = await this.helpers.httpRequestWithAuthentication.call(
-					this,
+				const response = await self.helpers.httpRequestWithAuthentication.call(
+					self,
 					'graphorApi',
 					requestOptions,
 				);
 
-				const executionData = this.helpers.constructExecutionMetaData(
-					this.helpers.returnJsonArray(responseData as IDataObject),
-					{ itemData: { item: i } },
-				);
+				return JSON.stringify(response);
+			},
+		});
 
-				returnData.push(...executionData);
-			} catch (error) {
-				if (this.continueOnFail()) {
-					const executionErrorData = this.helpers.constructExecutionMetaData(
-						this.helpers.returnJsonArray({ error: (error as Error).message }),
-						{ itemData: { item: i } },
-					);
-					returnData.push(...executionErrorData);
-					continue;
-				}
-				throw new NodeOperationError(this.getNode(), error as Error, {
-					itemIndex: i,
-				});
-			}
-		}
-
-		return [returnData];
+		return { response: tool };
 	}
 }
