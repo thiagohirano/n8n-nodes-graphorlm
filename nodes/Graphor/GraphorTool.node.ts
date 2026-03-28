@@ -11,6 +11,100 @@ import {
 } from 'n8n-workflow';
 import { DynamicTool } from '@langchain/core/tools';
 
+const QUESTION_KEYS = ['input', 'query', 'question', 'text'] as const;
+const NESTED_INPUT_KEYS = ['arguments', 'args', 'payload', 'data'] as const;
+
+function parseCsvList(value: string): string[] {
+	return value
+		.split(',')
+		.map((entry) => entry.trim())
+		.filter((entry) => entry.length > 0);
+}
+
+function extractQuestionCandidate(value: unknown): string | undefined {
+	if (typeof value === 'string') {
+		const trimmed = value.trim();
+		return trimmed.length > 0 ? trimmed : undefined;
+	}
+
+	if (Array.isArray(value)) {
+		for (const item of value) {
+			const extracted = extractQuestionCandidate(item);
+			if (extracted) {
+				return extracted;
+			}
+		}
+
+		return undefined;
+	}
+
+	if (value && typeof value === 'object') {
+		const record = value as Record<string, unknown>;
+
+		for (const key of QUESTION_KEYS) {
+			const extracted = extractQuestionCandidate(record[key]);
+			if (extracted) {
+				return extracted;
+			}
+		}
+
+		for (const key of NESTED_INPUT_KEYS) {
+			const extracted = extractQuestionCandidate(record[key]);
+			if (extracted) {
+				return extracted;
+			}
+		}
+	}
+
+	return undefined;
+}
+
+function resolveQuestion(queryParam: string, agentInput: string): string {
+	const trimmedQuery = queryParam.trim();
+	if (trimmedQuery.length > 0) {
+		return trimmedQuery;
+	}
+
+	const trimmedInput = agentInput.trim();
+	if (trimmedInput.length === 0) {
+		throw new Error('Graphor tool received an empty query');
+	}
+
+	try {
+		const parsed = JSON.parse(trimmedInput) as unknown;
+		const extracted = extractQuestionCandidate(parsed);
+		if (extracted) {
+			return extracted;
+		}
+
+		throw new Error('Could not extract a question from the tool input payload');
+	} catch (error) {
+		if (error instanceof SyntaxError) {
+			return trimmedInput;
+		}
+
+		throw error;
+	}
+}
+
+function formatToolResponse(response: IDataObject): string {
+	if (response.structured_output !== undefined) {
+		return typeof response.structured_output === 'string'
+			? response.structured_output
+			: JSON.stringify(response.structured_output);
+	}
+
+	if (typeof response.answer === 'string' && response.answer.trim().length > 0) {
+		return response.answer;
+	}
+
+	if (typeof response.raw_json === 'string' && response.raw_json.trim().length > 0) {
+		return response.raw_json;
+	}
+
+	return JSON.stringify(response);
+}
+
 export class GraphorTool implements INodeType {
 	description: INodeTypeDescription = {
 		displayName: 'Graphor Tool',
@@ -128,14 +222,6 @@ export class GraphorTool implements INodeType {
 
 	async supplyData(this: ISupplyDataFunctions, itemIndex: number): Promise<SupplyData> {
 		const toolDescription = this.getNodeParameter('toolDescription', itemIndex) as string;
-		const queryParam = this.getNodeParameter('query', itemIndex) as string;
-		const options = this.getNodeParameter('options', itemIndex) as {
-			fileIds?: string;
-			fileNames?: string;
-			conversationId?: string;
-			reset?: boolean;
-			thinkingLevel?: string;
-		};
 
 		const self = this;
 
@@ -143,39 +229,60 @@ export class GraphorTool implements INodeType {
 			name: 'graphor_ask',
 			description: toolDescription,
 			func: async (agentInput: string) => {
-				const question = queryParam || agentInput;
-				const body: IDataObject = { question };
+				try {
+					const queryParam = self.getNodeParameter('query', itemIndex) as string;
+					const options = (self.getNodeParameter('options', itemIndex) as {
+						fileIds?: string;
+						fileNames?: string;
+						conversationId?: string;
+						reset?: boolean;
+						thinkingLevel?: string;
+					}) ?? {};
 
-				if (options.fileIds) {
-					body.file_ids = options.fileIds.split(',').map((f) => f.trim());
-				}
-				if (options.fileNames) {
-					body.file_names = options.fileNames.split(',').map((f) => f.trim());
-				}
-				if (options.conversationId) {
-					body.conversation_id = options.conversationId;
-				}
-				if (options.reset) {
-					body.reset = true;
-				}
-				if (options.thinkingLevel) {
-					body.thinking_level = options.thinkingLevel;
-				}
+					const question = resolveQuestion(queryParam, agentInput);
 
-				const requestOptions: IHttpRequestOptions = {
-					method: 'POST',
-					url: 'https://sources.graphorlm.com/ask-sources',
-					body,
-					json: true,
-				};
+					const body: IDataObject = { question };
 
-				const response = await self.helpers.httpRequestWithAuthentication.call(
-					self,
-					'graphorApi',
-					requestOptions,
-				);
+					if (options.fileIds) {
+						const fileIds = parseCsvList(options.fileIds);
+						if (fileIds.length > 0) {
+							body.file_ids = fileIds;
+						}
+					}
+					if (options.fileNames) {
+						const fileNames = parseCsvList(options.fileNames);
+						if (fileNames.length > 0) {
+							body.file_names = fileNames;
+						}
+					}
+					if (options.conversationId) {
+						body.conversation_id = options.conversationId;
+					}
+					if (options.reset) {
+						body.reset = true;
+					}
+					if (options.thinkingLevel) {
+						body.thinking_level = options.thinkingLevel;
+					}
 
-				return JSON.stringify(response);
+					const requestOptions: IHttpRequestOptions = {
+						method: 'POST',
+						url: 'https://sources.graphorlm.com/ask-sources',
+						body,
+						json: true,
+					};
+
+					const response = await self.helpers.httpRequestWithAuthentication.call(
+						self,
+						'graphorApi',
+						requestOptions,
+					);
+
+					return formatToolResponse(response as IDataObject);
+				} catch (error: unknown) {
+					const message = error instanceof Error ? error.message : String(error);
+					throw new Error(`Graphor tool failed: ${message}`);
+				}
 			},
 		});
 
