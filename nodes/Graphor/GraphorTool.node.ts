@@ -1,6 +1,5 @@
 import {
 	NodeConnectionTypes,
-	NodeOperationError,
 	type IExecuteFunctions,
 	type INodeExecutionData,
 	type INodeType,
@@ -124,10 +123,7 @@ export class GraphorTool implements INodeType {
 	};
 
 	async execute(this: IExecuteFunctions): Promise<INodeExecutionData[][]> {
-		throw new NodeOperationError(
-			this.getNode(),
-			'This node is meant to be used as a tool with an AI Agent. Please connect it to an AI Agent node.',
-		);
+		return [[]];
 	}
 
 	async supplyData(this: ISupplyDataFunctions, itemIndex: number): Promise<SupplyData> {
