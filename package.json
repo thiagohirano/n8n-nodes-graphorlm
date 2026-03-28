@@ -51,7 +51,7 @@
     ],
     "nodes": [
       "dist/nodes/Graphor/Graphor.node.js",
-      "dist/nodes/Graphor/GraphorTool.node.js"
+      "dist/nodes/Graphor/GraphorNativeTool.node.js"
     ]
   },
   "devDependencies": {
