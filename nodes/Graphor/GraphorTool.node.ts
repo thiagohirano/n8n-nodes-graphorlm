@@ -1,5 +1,8 @@
 import {
 	NodeConnectionTypes,
+	NodeOperationError,
+	type IExecuteFunctions,
+	type INodeExecutionData,
 	type INodeType,
 	type INodeTypeDescription,
 	type ISupplyDataFunctions,
@@ -47,6 +50,16 @@ export class GraphorTool implements INodeType {
 				description: 'Description of this tool that helps the AI Agent understand when and how to use it',
 			},
 			{
+				displayName: 'Query',
+				name: 'query',
+				type: 'string',
+				default: '',
+				typeOptions: {
+					rows: 2,
+				},
+				description: 'The question to ask Graphor. Leave empty to let the AI Agent provide the query.',
+			},
+			{
 				displayName: 'Options',
 				name: 'options',
 				type: 'collection',
@@ -73,6 +86,13 @@ export class GraphorTool implements INodeType {
 						type: 'string',
 						default: '',
 						description: 'Conversation ID to maintain context across multiple questions',
+					},
+					{
+						displayName: 'Reset Conversation',
+						name: 'reset',
+						type: 'boolean',
+						default: false,
+						description: 'Whether to clear conversation history before sending the question',
 					},
 					{
 						displayName: 'Thinking Level',
@@ -103,12 +123,21 @@ export class GraphorTool implements INodeType {
 		],
 	};
 
+	async execute(this: IExecuteFunctions): Promise<INodeExecutionData[][]> {
+		throw new NodeOperationError(
+			this.getNode(),
+			'This node is meant to be used as a tool with an AI Agent. Please connect it to an AI Agent node.',
+		);
+	}
+
 	async supplyData(this: ISupplyDataFunctions, itemIndex: number): Promise<SupplyData> {
 		const toolDescription = this.getNodeParameter('toolDescription', itemIndex) as string;
+		const queryParam = this.getNodeParameter('query', itemIndex) as string;
 		const options = this.getNodeParameter('options', itemIndex) as {
 			fileIds?: string;
 			fileNames?: string;
 			conversationId?: string;
+			reset?: boolean;
 			thinkingLevel?: string;
 		};
 
@@ -117,7 +146,8 @@ export class GraphorTool implements INodeType {
 		const tool = new DynamicTool({
 			name: 'graphor_ask',
 			description: toolDescription,
-			func: async (question: string) => {
+			func: async (agentInput: string) => {
+				const question = queryParam || agentInput;
 				const body: IDataObject = { question };
 
 				if (options.fileIds) {
@@ -128,6 +158,9 @@ export class GraphorTool implements INodeType {
 				}
 				if (options.conversationId) {
 					body.conversation_id = options.conversationId;
+				}
+				if (options.reset) {
+					body.reset = true;
 				}
 				if (options.thinkingLevel) {
 					body.thinking_level = options.thinkingLevel;
