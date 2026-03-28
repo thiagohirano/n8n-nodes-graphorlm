@@ -59,32 +59,41 @@ function extractQuestionCandidate(value: unknown): string | undefined {
 	return undefined;
 }
 
-function resolveQuestion(queryParam: string, agentInput: string): string {
+function resolveQuestion(queryParam: string, agentInput: unknown): string {
 	const trimmedQuery = queryParam.trim();
 	if (trimmedQuery.length > 0) {
 		return trimmedQuery;
 	}
 
-	const trimmedInput = agentInput.trim();
-	if (trimmedInput.length === 0) {
-		throw new Error('Graphor tool received an empty query');
-	}
-
-	try {
-		const parsed = JSON.parse(trimmedInput) as unknown;
-		const extracted = extractQuestionCandidate(parsed);
-		if (extracted) {
-			return extracted;
+	if (typeof agentInput === 'string') {
+		const trimmedInput = agentInput.trim();
+		if (trimmedInput.length === 0) {
+			throw new Error('Graphor tool received an empty query');
 		}
 
-		throw new Error('Could not extract a question from the tool input payload');
-	} catch (error) {
-		if (error instanceof SyntaxError) {
-			return trimmedInput;
-		}
+		try {
+			const parsed = JSON.parse(trimmedInput) as unknown;
+			const extractedFromParsed = extractQuestionCandidate(parsed);
+			if (extractedFromParsed) {
+				return extractedFromParsed;
+			}
 
-		throw error;
+			throw new Error('Could not extract a question from the tool input payload');
+		} catch (error) {
+			if (error instanceof SyntaxError) {
+				return trimmedInput;
+			}
+
+			throw error;
+		}
 	}
+
+	const extractedFromInput = extractQuestionCandidate(agentInput);
+	if (extractedFromInput) {
+		return extractedFromInput;
+	}
+
+	throw new Error('Could not extract a question from the tool input payload');
 }
 
 function formatToolResponse(response: IDataObject): string {
@@ -228,7 +237,7 @@ export class GraphorTool implements INodeType {
 		const tool = new DynamicTool({
 			name: 'graphor_ask',
 			description: toolDescription,
-			func: async (agentInput: string) => {
+			func: async (agentInput: unknown) => {
 				try {
 					const queryParam = self.getNodeParameter('query', itemIndex) as string;
 					const options = (self.getNodeParameter('options', itemIndex) as {

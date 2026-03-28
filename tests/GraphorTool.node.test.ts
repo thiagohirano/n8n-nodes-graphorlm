@@ -181,6 +181,19 @@ describe('GraphorTool Node', () => {
 			expect(requests[0].options.body.question).toBe('Buscar Max Lucha 220');
 		});
 
+		it('should extract the question from a direct array payload', async () => {
+			const { ctx, requests } = createMockCtx({
+				toolDescription: 'test',
+				query: '',
+				options: {},
+			});
+
+			const result = await node.supplyData!.call(ctx as any, 0);
+			await (result.response as any).func([{ input: "Buscar por 'Max Luxa 220' e 'Maza Prime'" }]);
+
+			expect(requests[0].options.body.question).toBe("Buscar por 'Max Luxa 220' e 'Maza Prime'");
+		});
+
 		it('should extract the question from nested payload fields', async () => {
 			const { ctx, requests } = createMockCtx({
 				toolDescription: 'test',
@@ -192,6 +205,19 @@ describe('GraphorTool Node', () => {
 			await (result.response as any).func('{"arguments":{"question":"nested question"}}');
 
 			expect(requests[0].options.body.question).toBe('nested question');
+		});
+
+		it('should extract the question from a direct object payload', async () => {
+			const { ctx, requests } = createMockCtx({
+				toolDescription: 'test',
+				query: '',
+				options: {},
+			});
+
+			const result = await node.supplyData!.call(ctx as any, 0);
+			await (result.response as any).func({ input: 'Max Ducha', id: '6166n906' });
+
+			expect(requests[0].options.body.question).toBe('Max Ducha');
 		});
 
 		it('should use raw string when agent sends plain text', async () => {
