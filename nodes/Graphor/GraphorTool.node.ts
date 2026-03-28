@@ -256,6 +256,17 @@ export class GraphorTool implements INodeType {
 
 	async supplyData(this: ISupplyDataFunctions, itemIndex: number): Promise<SupplyData> {
 		const toolDescription = this.getNodeParameter('toolDescription', itemIndex) as string;
+		const queryParam = safelyGetQueryParam(this, itemIndex);
+		const options = (this.getNodeParameter('options', itemIndex) as {
+			fileIds?: string;
+			fileNames?: string;
+			conversationId?: string;
+			reset?: boolean;
+			thinkingLevel?: string;
+		}) ?? {};
+
+		const fileIds = options.fileIds ? parseCsvList(options.fileIds) : [];
+		const fileNames = options.fileNames ? parseCsvList(options.fileNames) : [];
 
 		const self = this;
 
@@ -264,30 +275,15 @@ export class GraphorTool implements INodeType {
 			description: toolDescription,
 			func: async (agentInput: unknown) => {
 				try {
-					const queryParam = safelyGetQueryParam(self, itemIndex);
-					const options = (self.getNodeParameter('options', itemIndex) as {
-						fileIds?: string;
-						fileNames?: string;
-						conversationId?: string;
-						reset?: boolean;
-						thinkingLevel?: string;
-					}) ?? {};
-
 					const question = resolveQuestion(queryParam, agentInput);
 
 					const body: IDataObject = { question };
 
-					if (options.fileIds) {
-						const fileIds = parseCsvList(options.fileIds);
-						if (fileIds.length > 0) {
-							body.file_ids = fileIds;
-						}
+					if (fileIds.length > 0) {
+						body.file_ids = fileIds;
 					}
-					if (options.fileNames) {
-						const fileNames = parseCsvList(options.fileNames);
-						if (fileNames.length > 0) {
-							body.file_names = fileNames;
-						}
+					if (fileNames.length > 0) {
+						body.file_names = fileNames;
 					}
 					if (options.conversationId) {
 						body.conversation_id = options.conversationId;
