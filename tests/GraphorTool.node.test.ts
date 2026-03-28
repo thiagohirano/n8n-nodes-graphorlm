@@ -88,6 +88,36 @@ describe('GraphorTool Node', () => {
 			};
 		}
 
+		function createMockCtxWithQueryError(
+			params: Record<string, unknown>,
+			onRequest?: (options: any) => any,
+		) {
+			const requests: { credentialType: string; options: any }[] = [];
+			return {
+				requests,
+				ctx: {
+					getNodeParameter: (name: string) => {
+						if (name === 'query') {
+							throw new Error(
+								'No parameters are set up to be filled by AI. Click on the ✨ button next to a parameter to allow AI to set its value.',
+							);
+						}
+
+						return params[name];
+					},
+					helpers: {
+						httpRequestWithAuthentication: {
+							call: async (_self: unknown, credentialType: string, options: any) => {
+								requests.push({ credentialType, options });
+								if (onRequest) return onRequest(options);
+								return { answer: 'The document says...', conversation_id: 'c1' };
+							},
+						},
+					},
+				},
+			};
+		}
+
 		it('should return a DynamicTool that calls /ask-sources', async () => {
 			const { ctx, requests } = createMockCtx({
 				toolDescription: 'Ask about documents',
@@ -127,6 +157,31 @@ describe('GraphorTool Node', () => {
 			await (result.response as any).func('agent input ignored');
 
 			expect(requests[0].options.body.question).toBe('Fixed query from parameter');
+		});
+
+		it('should ignore unresolved $fromAI query placeholders and use agent input', async () => {
+			const { ctx, requests } = createMockCtx({
+				toolDescription: 'test',
+				query: "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Query', ``, 'string') }}",
+				options: {},
+			});
+
+			const result = await node.supplyData!.call(ctx as any, 0);
+			await (result.response as any).func([{ input: "Buscar por 'Max Luxa 220' e 'Maza Prime'" }]);
+
+			expect(requests[0].options.body.question).toBe("Buscar por 'Max Luxa 220' e 'Maza Prime'");
+		});
+
+		it('should still use agent input when query expression evaluation throws', async () => {
+			const { ctx, requests } = createMockCtxWithQueryError({
+				toolDescription: 'test',
+				options: {},
+			});
+
+			const result = await node.supplyData!.call(ctx as any, 0);
+			await (result.response as any).func([{ input: "Buscar por 'Max Luxa 220' e 'Maza Prime'" }]);
+
+			expect(requests[0].options.body.question).toBe("Buscar por 'Max Luxa 220' e 'Maza Prime'");
 		});
 
 		it('should parse JSON agent input to extract question', async () => {

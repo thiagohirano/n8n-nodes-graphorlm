@@ -61,6 +61,17 @@ function extractQuestionCandidate(value: unknown): string | undefined {
 
 function resolveQuestion(queryParam: string, agentInput: unknown): string {
 	const trimmedQuery = queryParam.trim();
+	// Guard against unresolved expression placeholders in the Query field.
+	// In this case we should ignore queryParam and use the agent input instead.
+	const shouldIgnoreQueryParam =
+		trimmedQuery === '=' ||
+		trimmedQuery.includes('$fromAI(') ||
+		trimmedQuery.includes('n8n-auto-generated-fromAI-override');
+
+	if (shouldIgnoreQueryParam) {
+		return resolveQuestion('', agentInput);
+	}
+
 	if (trimmedQuery.length > 0) {
 		return trimmedQuery;
 	}
@@ -94,6 +105,19 @@ function resolveQuestion(queryParam: string, agentInput: unknown): string {
 	}
 
 	throw new Error('Could not extract a question from the tool input payload');
+}
+
+function safelyGetQueryParam(
+	ctx: ISupplyDataFunctions,
+	itemIndex: number,
+): string {
+	try {
+		return (ctx.getNodeParameter('query', itemIndex) as string) ?? '';
+	} catch {
+		// If query expression fails (for example unresolved $fromAI placeholder),
+		// fall back to agentInput to avoid dropping the tool call.
+		return '';
+	}
 }
 
 function formatToolResponse(response: IDataObject): string {
@@ -156,6 +180,7 @@ export class GraphorTool implements INodeType {
 				name: 'query',
 				type: 'string',
 				default: '',
+				noDataExpression: true,
 				typeOptions: {
 					rows: 2,
 				},
@@ -239,7 +264,7 @@ export class GraphorTool implements INodeType {
 			description: toolDescription,
 			func: async (agentInput: unknown) => {
 				try {
-					const queryParam = self.getNodeParameter('query', itemIndex) as string;
+					const queryParam = safelyGetQueryParam(self, itemIndex);
 					const options = (self.getNodeParameter('options', itemIndex) as {
 						fileIds?: string;
 						fileNames?: string;
