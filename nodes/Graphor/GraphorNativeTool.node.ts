@@ -5,7 +5,8 @@ import {
 	type INodeTypeDescription,
 	type IDataObject,
 	type IHttpRequestOptions,
-	NodeOperationError,
+	type JsonObject,
+	NodeApiError,
 } from 'n8n-workflow';
 
 function parseCsvList(value: string): string[] {
@@ -22,6 +23,7 @@ export class GraphorNativeTool implements INodeType {
 		icon: 'file:graphor.svg',
 		group: ['transform'],
 		version: 1,
+		subtitle: '={{$parameter["question"].slice(0, 40)}}',
 		description: 'Ask questions about documents using Graphor AI through n8n native tool wrapping',
 		defaults: {
 			name: 'Ask Graphor (Native)',
@@ -35,12 +37,6 @@ export class GraphorNativeTool implements INodeType {
 				required: true,
 			},
 		],
-		codex: {
-			categories: ['AI'],
-			subcategories: {
-				AI: ['Tools'],
-			},
-		},
 		properties: [
 			{
 				displayName: 'Question',
@@ -176,7 +172,7 @@ export class GraphorNativeTool implements INodeType {
 					continue;
 				}
 
-				throw new NodeOperationError(this.getNode(), error as Error, {
+				throw new NodeApiError(this.getNode(), error as JsonObject, {
 					itemIndex: i,
 				});
 			}

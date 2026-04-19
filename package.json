@@ -33,7 +33,7 @@
     "url": "https://github.com/thiagohirano/n8n-nodes-graphorlm.git"
   },
   "scripts": {
-    "build": "tsc && gulp build:icons",
+    "build": "tsc && gulp build:assets",
     "dev": "tsc --watch",
     "format": "prettier nodes credentials --write",
     "lint": "eslint 'nodes/**/*.ts' 'credentials/**/*.ts'",
