@@ -1,5 +1,5 @@
 {
-	"node": "n8n-nodes-base.graphorNativeTool",
+	"node": "n8n-nodes-graphorlm.graphorNativeTool",
 	"nodeVersion": "1.0",
 	"codexVersion": "1.0",
 	"categories": ["Productivity"],
