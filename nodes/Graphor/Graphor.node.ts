@@ -8,6 +8,60 @@ import {
 	IHttpRequestOptions,
 } from 'n8n-workflow';
 
+function parseCsvList(value: string): string[] {
+	return value
+		.split(',')
+		.map((entry) => entry.trim())
+		.filter((entry) => entry.length > 0);
+}
+
+function escapeMultipartValue(value: string): string {
+	return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+}
+
+function buildMultipartBody(
+	file: {
+		fieldName: string;
+		filename: string;
+		contentType?: string;
+		data: Buffer;
+	},
+	fields: IDataObject = {},
+): { body: Buffer; headers: IDataObject } {
+	const boundary = `----graphor-${Date.now().toString(16)}-${Math.random()
+		.toString(16)
+		.slice(2)}`;
+	const chunks: Buffer[] = [];
+	const appendString = (value: string) => chunks.push(Buffer.from(value, 'utf8'));
+
+	for (const [name, value] of Object.entries(fields)) {
+		if (value === undefined || value === null || value === '') continue;
+		appendString(`--${boundary}\r\n`);
+		appendString(`Content-Disposition: form-data; name="${escapeMultipartValue(name)}"\r\n\r\n`);
+		appendString(`${String(value)}\r\n`);
+	}
+
+	appendString(`--${boundary}\r\n`);
+	appendString(
+		`Content-Disposition: form-data; name="${escapeMultipartValue(
+			file.fieldName,
+		)}"; filename="${escapeMultipartValue(file.filename)}"\r\n`,
+	);
+	appendString(`Content-Type: ${file.contentType || 'application/octet-stream'}\r\n\r\n`);
+	chunks.push(file.data);
+	appendString(`\r\n--${boundary}--\r\n`);
+
+	const body = Buffer.concat(chunks);
+
+	return {
+		body,
+		headers: {
+			'Content-Type': `multipart/form-data; boundary=${boundary}`,
+			'Content-Length': body.length,
+		},
+	};
+}
+
 export class Graphor implements INodeType {
 	description: INodeTypeDescription = {
 		displayName: 'Graphor',
@@ -16,7 +70,8 @@ export class Graphor implements INodeType {
 		group: ['transform'],
 		version: 1,
 		subtitle: '={{$parameter["operation"] + ": " + $parameter["resource"]}}',
-		description: 'Interact with Graphor API for document processing, RAG, and AI-powered document chat',
+		description:
+			'Interact with Graphor API for document processing, RAG, and AI-powered document chat',
 		defaults: {
 			name: 'Graphor',
 		},
@@ -45,6 +100,11 @@ export class Graphor implements INodeType {
 						name: 'Extraction',
 						value: 'extraction',
 						description: 'Extract structured data from documents',
+					},
+					{
+						name: 'Retrieval',
+						value: 'retrieval',
+						description: 'Retrieve relevant chunks using semantic search',
 					},
 					{
 						name: 'Source',
@@ -116,7 +176,8 @@ export class Graphor implements INodeType {
 						name: 'fileIds',
 						type: 'string',
 						default: '',
-						description: 'Comma-separated list of file IDs to restrict search to specific documents',
+						description:
+							'Comma-separated list of file IDs to restrict search to specific documents',
 					},
 					{
 						displayName: 'File Names (Deprecated)',
@@ -143,22 +204,25 @@ export class Graphor implements INodeType {
 						displayName: 'Thinking Level',
 						name: 'thinkingLevel',
 						type: 'options',
-						default: 'balanced',
+						default: 'accurate',
 						options: [
 							{
 								name: 'Fast',
 								value: 'fast',
-								description: 'Uses a faster model without extended thinking. Best for simple questions where speed is prioritized.',
+								description:
+									'Uses a faster model without extended thinking. Best for simple questions where speed is prioritized.',
 							},
 							{
 								name: 'Balanced',
 								value: 'balanced',
-								description: 'Default. Uses a more capable model with low thinking. Good balance between quality and speed.',
+								description:
+									'Uses a more capable model with low thinking. Good balance between quality and speed.',
 							},
 							{
 								name: 'Accurate',
 								value: 'accurate',
-								description: 'Uses a more capable model with high thinking. Best for complex questions requiring deep reasoning.',
+								description:
+									'Default. Uses a more capable model with high thinking. Best for complex questions requiring deep reasoning.',
 							},
 						],
 						description: 'Controls model and thinking configuration',
@@ -212,7 +276,8 @@ export class Graphor implements INodeType {
 						operation: ['extractData'],
 					},
 				},
-				description: 'Comma-separated list of file names to extract from. Deprecated: use File IDs instead.',
+				description:
+					'Comma-separated list of file names to extract from. Deprecated: use File IDs instead.',
 			},
 			{
 				displayName: 'User Instruction',
@@ -233,7 +298,8 @@ export class Graphor implements INodeType {
 				name: 'outputSchema',
 				type: 'json',
 				required: true,
-				default: '{\n  "type": "object",\n  "properties": {\n    "field_name": {\n      "type": "string",\n      "description": "Description of the field"\n    }\n  }\n}',
+				default:
+					'{\n  "type": "object",\n  "properties": {\n    "field_name": {\n      "type": "string",\n      "description": "Description of the field"\n    }\n  }\n}',
 				displayOptions: {
 					show: {
 						resource: ['extraction'],
@@ -246,7 +312,7 @@ export class Graphor implements INodeType {
 				displayName: 'Thinking Level',
 				name: 'thinkingLevel',
 				type: 'options',
-				default: 'balanced',
+				default: 'accurate',
 				displayOptions: {
 					show: {
 						resource: ['extraction'],
@@ -257,20 +323,89 @@ export class Graphor implements INodeType {
 					{
 						name: 'Fast',
 						value: 'fast',
-						description: 'Uses a faster model without extended thinking. Best for simple extractions where speed is prioritized.',
+						description:
+							'Uses a faster model without extended thinking. Best for simple extractions where speed is prioritized.',
 					},
 					{
 						name: 'Balanced',
 						value: 'balanced',
-						description: 'Default. Uses a more capable model with low thinking. Good balance between quality and speed.',
+						description:
+							'Uses a more capable model with low thinking. Good balance between quality and speed.',
 					},
 					{
 						name: 'Accurate',
 						value: 'accurate',
-						description: 'Uses a more capable model with high thinking. Best for complex extractions requiring deep reasoning.',
+						description:
+							'Default. Uses a more capable model with high thinking. Best for complex extractions requiring deep reasoning.',
 					},
 				],
 				description: 'Controls model and thinking configuration',
+			},
+
+			// ==================== RETRIEVAL OPERATIONS ====================
+			{
+				displayName: 'Operation',
+				name: 'operation',
+				type: 'options',
+				noDataExpression: true,
+				displayOptions: {
+					show: {
+						resource: ['retrieval'],
+					},
+				},
+				options: [
+					{
+						name: 'Retrieve Chunks',
+						value: 'retrieveChunks',
+						description: 'Retrieve relevant document chunks using semantic search',
+						action: 'Retrieve relevant document chunks',
+					},
+				],
+				default: 'retrieveChunks',
+			},
+			{
+				displayName: 'Query',
+				name: 'query',
+				type: 'string',
+				required: true,
+				default: '',
+				displayOptions: {
+					show: {
+						resource: ['retrieval'],
+						operation: ['retrieveChunks'],
+					},
+				},
+				description: 'The search query to retrieve relevant chunks',
+			},
+			{
+				displayName: 'Additional Fields',
+				name: 'retrievalAdditionalFields',
+				type: 'collection',
+				placeholder: 'Add Field',
+				default: {},
+				displayOptions: {
+					show: {
+						resource: ['retrieval'],
+						operation: ['retrieveChunks'],
+					},
+				},
+				options: [
+					{
+						displayName: 'File IDs',
+						name: 'fileIds',
+						type: 'string',
+						default: '',
+						description:
+							'Comma-separated list of file IDs to restrict retrieval to specific documents',
+					},
+					{
+						displayName: 'File Names (Deprecated)',
+						name: 'fileNames',
+						type: 'string',
+						default: '',
+						description: 'Comma-separated list of file names. Deprecated: use File IDs instead.',
+					},
+				],
 			},
 
 			// ==================== SOURCE OPERATIONS ====================
@@ -285,6 +420,12 @@ export class Graphor implements INodeType {
 					},
 				},
 				options: [
+					{
+						name: 'Get Build Status',
+						value: 'getBuildStatus',
+						description: 'Poll the status of an async ingestion or reprocess build',
+						action: 'Get build status',
+					},
 					{
 						name: 'Delete',
 						value: 'delete',
@@ -306,8 +447,8 @@ export class Graphor implements INodeType {
 					{
 						name: 'Process',
 						value: 'process',
-						description: 'Process a source with OCR/parsing',
-						action: 'Process a source',
+						description: 'Reprocess an existing source with a different parsing method',
+						action: 'Reprocess a source',
 					},
 					{
 						name: 'Upload File',
@@ -320,6 +461,12 @@ export class Graphor implements INodeType {
 						value: 'uploadGithub',
 						description: 'Upload content from a GitHub repository',
 						action: 'Upload from Git Hub',
+					},
+					{
+						name: 'Upload From YouTube',
+						value: 'uploadYoutube',
+						description: 'Upload content from a YouTube video',
+						action: 'Upload from YouTube',
 					},
 					{
 						name: 'Upload From URL',
@@ -345,6 +492,46 @@ export class Graphor implements INodeType {
 				},
 				description: 'The name of the input field containing the binary file data',
 			},
+			{
+				displayName: 'Partition Method',
+				name: 'ingestMethod',
+				type: 'options',
+				default: '',
+				displayOptions: {
+					show: {
+						resource: ['source'],
+						operation: ['uploadFile', 'uploadUrl'],
+					},
+				},
+				options: [
+					{
+						name: 'System Default',
+						value: '',
+						description: 'Do not send a method and let Graphor use its default',
+					},
+					{
+						name: 'Fast',
+						value: 'fast',
+						description: 'Fast processing with heuristic classification. No OCR.',
+					},
+					{
+						name: 'Balanced',
+						value: 'balanced',
+						description: 'OCR-based extraction with structure classification.',
+					},
+					{
+						name: 'Accurate',
+						value: 'accurate',
+						description: 'Fine-tuned model for highest accuracy.',
+					},
+					{
+						name: 'Agentic',
+						value: 'agentic',
+						description: 'Highest accuracy for complex layouts, tables, and diagrams.',
+					},
+				],
+				description: 'Optional parsing method to use for ingestion',
+			},
 			// Source - Upload URL fields
 			{
 				displayName: 'URL',
@@ -359,6 +546,19 @@ export class Graphor implements INodeType {
 					},
 				},
 				description: 'The public web page URL to scrape and ingest',
+			},
+			{
+				displayName: 'Crawl URLs',
+				name: 'crawlUrls',
+				type: 'boolean',
+				default: false,
+				displayOptions: {
+					show: {
+						resource: ['source'],
+						operation: ['uploadUrl'],
+					},
+				},
+				description: 'Whether to follow and ingest links found on the page',
 			},
 			// Source - Upload GitHub fields
 			{
@@ -375,10 +575,38 @@ export class Graphor implements INodeType {
 				},
 				description: 'The public GitHub repository URL',
 			},
-			// Source - Process fields
 			{
-				displayName: 'File Name',
-				name: 'fileName',
+				displayName: 'YouTube URL',
+				name: 'youtubeUrl',
+				type: 'string',
+				required: true,
+				default: '',
+				displayOptions: {
+					show: {
+						resource: ['source'],
+						operation: ['uploadYoutube'],
+					},
+				},
+				description: 'The public YouTube video URL',
+			},
+			// Source - file/build identifiers
+			{
+				displayName: 'Build ID',
+				name: 'buildId',
+				type: 'string',
+				required: true,
+				default: '',
+				displayOptions: {
+					show: {
+						resource: ['source'],
+						operation: ['getBuildStatus'],
+					},
+				},
+				description: 'The build ID returned by ingest or reprocess',
+			},
+			{
+				displayName: 'File ID',
+				name: 'fileId',
 				type: 'string',
 				required: true,
 				default: '',
@@ -388,13 +616,13 @@ export class Graphor implements INodeType {
 						operation: ['process', 'delete', 'getElements'],
 					},
 				},
-				description: 'The name of the file to process/delete/get elements from',
+				description: 'The unique file ID returned by build status or list sources',
 			},
 			{
 				displayName: 'Partition Method',
 				name: 'partitionMethod',
 				type: 'options',
-				default: 'basic',
+				default: 'fast',
 				displayOptions: {
 					show: {
 						resource: ['source'],
@@ -403,32 +631,127 @@ export class Graphor implements INodeType {
 				},
 				options: [
 					{
-						name: 'Basic',
-						value: 'basic',
-						description: 'Fast processing with heuristic classification',
+						name: 'Fast',
+						value: 'fast',
+						description: 'Fast processing with heuristic classification. No OCR.',
 					},
 					{
-						name: 'Hi-Res',
-						value: 'hi_res',
-						description: 'High resolution processing with advanced layout detection',
+						name: 'Balanced',
+						value: 'balanced',
+						description: 'OCR-based extraction with structure classification.',
 					},
 					{
-						name: 'Hi-Res FT',
-						value: 'hi_res_ft',
-						description: 'Fine-tuned high resolution processing',
+						name: 'Accurate',
+						value: 'accurate',
+						description: 'Fine-tuned model for highest accuracy.',
 					},
 					{
-						name: 'MAI',
-						value: 'mai',
-						description: 'Multi-modal AI processing',
-					},
-					{
-						name: 'GraphorLM',
-						value: 'graphorlm',
-						description: 'Graphor proprietary processing method',
+						name: 'Agentic',
+						value: 'agentic',
+						description: 'Highest accuracy for complex layouts, tables, and diagrams.',
 					},
 				],
 				description: 'The processing method to use for document parsing',
+			},
+			{
+				displayName: 'Additional Fields',
+				name: 'buildStatusAdditionalFields',
+				type: 'collection',
+				placeholder: 'Add Field',
+				default: {},
+				displayOptions: {
+					show: {
+						resource: ['source'],
+						operation: ['getBuildStatus'],
+					},
+				},
+				options: [
+					{
+						displayName: 'Suppress Elements',
+						name: 'suppressElements',
+						type: 'boolean',
+						default: false,
+						description: 'Whether to omit parsed elements from the response',
+					},
+					{
+						displayName: 'Suppress Image Base64',
+						name: 'suppressImgBase64',
+						type: 'boolean',
+						default: false,
+						description: 'Whether to omit img_base64 from elements',
+					},
+					{
+						displayName: 'Page',
+						name: 'page',
+						type: 'number',
+						default: 1,
+						description: '1-based page number for element pagination',
+					},
+					{
+						displayName: 'Page Size',
+						name: 'pageSize',
+						type: 'number',
+						default: 50,
+						description: 'Number of elements per page (max 100)',
+					},
+				],
+			},
+			{
+				displayName: 'Additional Fields',
+				name: 'getElementsAdditionalFields',
+				type: 'collection',
+				placeholder: 'Add Field',
+				default: {},
+				displayOptions: {
+					show: {
+						resource: ['source'],
+						operation: ['getElements'],
+					},
+				},
+				options: [
+					{
+						displayName: 'Element Type',
+						name: 'type',
+						type: 'string',
+						default: '',
+						description: 'Filter by element type, e.g. Title, NarrativeText, Table',
+					},
+					{
+						displayName: 'Elements To Remove',
+						name: 'elementsToRemove',
+						type: 'string',
+						default: '',
+						description: 'Comma-separated element types to exclude',
+					},
+					{
+						displayName: 'Page',
+						name: 'page',
+						type: 'number',
+						default: 1,
+						description: '1-based page number for pagination',
+					},
+					{
+						displayName: 'Page Numbers',
+						name: 'pageNumbers',
+						type: 'string',
+						default: '',
+						description: 'Comma-separated page numbers to include',
+					},
+					{
+						displayName: 'Page Size',
+						name: 'pageSize',
+						type: 'number',
+						default: 50,
+						description: 'Number of elements per page (max 100)',
+					},
+					{
+						displayName: 'Suppress Image Base64',
+						name: 'suppressImgBase64',
+						type: 'boolean',
+						default: false,
+						description: 'Whether to omit img_base64 from each element',
+					},
+				],
 			},
 		],
 	};
@@ -464,10 +787,10 @@ export class Graphor implements INodeType {
 							body.conversation_id = additionalFields.conversationId;
 						}
 						if (additionalFields.fileIds) {
-							body.file_ids = additionalFields.fileIds.split(',').map((f) => f.trim());
+							body.file_ids = parseCsvList(additionalFields.fileIds);
 						}
 						if (additionalFields.fileNames) {
-							body.file_names = additionalFields.fileNames.split(',').map((f) => f.trim());
+							body.file_names = parseCsvList(additionalFields.fileNames);
 						}
 						if (additionalFields.reset !== undefined) {
 							body.reset = additionalFields.reset;
@@ -509,10 +832,10 @@ export class Graphor implements INodeType {
 						};
 
 						if (fileIds) {
-							body.file_ids = fileIds.split(',').map((f) => f.trim());
+							body.file_ids = parseCsvList(fileIds);
 						}
 						if (fileNames) {
-							body.file_names = fileNames.split(',').map((f) => f.trim());
+							body.file_names = parseCsvList(fileNames);
 						}
 						if (thinkingLevel) {
 							body.thinking_level = thinkingLevel;
@@ -521,6 +844,39 @@ export class Graphor implements INodeType {
 						const options: IHttpRequestOptions = {
 							method: 'POST',
 							url: 'https://sources.graphorlm.com/run-extraction',
+							body,
+							json: true,
+						};
+
+						responseData = await this.helpers.httpRequestWithAuthentication.call(
+							this,
+							'graphorApi',
+							options,
+						);
+					}
+				}
+
+				// ==================== RETRIEVAL ====================
+				if (resource === 'retrieval') {
+					if (operation === 'retrieveChunks') {
+						const query = this.getNodeParameter('query', i) as string;
+						const additionalFields = this.getNodeParameter('retrievalAdditionalFields', i) as {
+							fileIds?: string;
+							fileNames?: string;
+						};
+
+						const body: IDataObject = { query };
+
+						if (additionalFields.fileIds) {
+							body.file_ids = parseCsvList(additionalFields.fileIds);
+						}
+						if (additionalFields.fileNames) {
+							body.file_names = parseCsvList(additionalFields.fileNames);
+						}
+
+						const options: IHttpRequestOptions = {
+							method: 'POST',
+							url: 'https://sources.graphorlm.com/prebuilt-rag',
 							body,
 							json: true,
 						};
@@ -551,6 +907,7 @@ export class Graphor implements INodeType {
 
 					if (operation === 'uploadFile') {
 						const binaryPropertyName = this.getNodeParameter('binaryPropertyName', i) as string;
+						const ingestMethod = this.getNodeParameter('ingestMethod', i) as string;
 						const binaryData = this.helpers.assertBinaryData(i, binaryPropertyName);
 
 						let uploadData: Buffer;
@@ -563,13 +920,22 @@ export class Graphor implements INodeType {
 							uploadData = Buffer.from(binaryData.data, 'base64');
 						}
 
-						const formData = new FormData();
-						formData.append('file', new Blob([uploadData], { type: binaryData.mimeType }), binaryData.fileName || 'file');
+						const multipart = buildMultipartBody(
+							{
+								fieldName: 'file',
+								filename: binaryData.fileName || 'file',
+								contentType: binaryData.mimeType,
+								data: uploadData,
+							},
+							ingestMethod ? { method: ingestMethod } : {},
+						);
 
 						const options: IHttpRequestOptions = {
 							method: 'POST',
-							url: 'https://sources.graphorlm.com/upload',
-							body: formData,
+							url: 'https://sources.graphorlm.com/ingest-file',
+							headers: multipart.headers,
+							body: multipart.body,
+							json: true,
 						};
 
 						responseData = await this.helpers.httpRequestWithAuthentication.call(
@@ -581,11 +947,18 @@ export class Graphor implements INodeType {
 
 					if (operation === 'uploadUrl') {
 						const url = this.getNodeParameter('url', i) as string;
+						const crawlUrls = this.getNodeParameter('crawlUrls', i) as boolean;
+						const ingestMethod = this.getNodeParameter('ingestMethod', i) as string;
+
+						const body: IDataObject = { url, crawlUrls };
+						if (ingestMethod) {
+							body.method = ingestMethod;
+						}
 
 						const options: IHttpRequestOptions = {
 							method: 'POST',
-							url: 'https://sources.graphorlm.com/upload-url-source',
-							body: { url },
+							url: 'https://sources.graphorlm.com/ingest-url',
+							body,
 							json: true,
 						};
 
@@ -601,7 +974,7 @@ export class Graphor implements INodeType {
 
 						const options: IHttpRequestOptions = {
 							method: 'POST',
-							url: 'https://sources.graphorlm.com/upload-github-source',
+							url: 'https://sources.graphorlm.com/ingest-github',
 							body: { url: githubUrl },
 							json: true,
 						};
@@ -613,16 +986,70 @@ export class Graphor implements INodeType {
 						);
 					}
 
+					if (operation === 'uploadYoutube') {
+						const youtubeUrl = this.getNodeParameter('youtubeUrl', i) as string;
+
+						const options: IHttpRequestOptions = {
+							method: 'POST',
+							url: 'https://sources.graphorlm.com/ingest-youtube',
+							body: { url: youtubeUrl },
+							json: true,
+						};
+
+						responseData = await this.helpers.httpRequestWithAuthentication.call(
+							this,
+							'graphorApi',
+							options,
+						);
+					}
+
+					if (operation === 'getBuildStatus') {
+						const buildId = this.getNodeParameter('buildId', i) as string;
+						const additionalFields = this.getNodeParameter('buildStatusAdditionalFields', i) as {
+							suppressElements?: boolean;
+							suppressImgBase64?: boolean;
+							page?: number;
+							pageSize?: number;
+						};
+
+						const qs: IDataObject = {};
+						if (additionalFields.suppressElements !== undefined) {
+							qs.suppress_elements = additionalFields.suppressElements;
+						}
+						if (additionalFields.suppressImgBase64 !== undefined) {
+							qs.suppress_img_base64 = additionalFields.suppressImgBase64;
+						}
+						if (additionalFields.page !== undefined) {
+							qs.page = additionalFields.page;
+						}
+						if (additionalFields.pageSize !== undefined) {
+							qs.page_size = additionalFields.pageSize;
+						}
+
+						const options: IHttpRequestOptions = {
+							method: 'GET',
+							url: `https://sources.graphorlm.com/builds/${encodeURIComponent(buildId)}`,
+							qs,
+							json: true,
+						};
+
+						responseData = await this.helpers.httpRequestWithAuthentication.call(
+							this,
+							'graphorApi',
+							options,
+						);
+					}
+
 					if (operation === 'process') {
-						const fileName = this.getNodeParameter('fileName', i) as string;
+						const fileId = this.getNodeParameter('fileId', i) as string;
 						const partitionMethod = this.getNodeParameter('partitionMethod', i) as string;
 
 						const options: IHttpRequestOptions = {
 							method: 'POST',
-							url: 'https://sources.graphorlm.com/process',
+							url: 'https://sources.graphorlm.com/reprocess',
 							body: {
-								file_name: fileName,
-								partition_method: partitionMethod,
+								file_id: fileId,
+								method: partitionMethod,
 							},
 							json: true,
 						};
@@ -635,14 +1062,42 @@ export class Graphor implements INodeType {
 					}
 
 					if (operation === 'getElements') {
-						const fileName = this.getNodeParameter('fileName', i) as string;
+						const fileId = this.getNodeParameter('fileId', i) as string;
+						const additionalFields = this.getNodeParameter('getElementsAdditionalFields', i) as {
+							type?: string;
+							elementsToRemove?: string;
+							page?: number;
+							pageNumbers?: string;
+							pageSize?: number;
+							suppressImgBase64?: boolean;
+						};
+
+						const qs: IDataObject = { file_id: fileId };
+						if (additionalFields.page !== undefined) {
+							qs.page = additionalFields.page;
+						}
+						if (additionalFields.pageSize !== undefined) {
+							qs.page_size = additionalFields.pageSize;
+						}
+						if (additionalFields.suppressImgBase64 !== undefined) {
+							qs.suppress_img_base64 = additionalFields.suppressImgBase64;
+						}
+						if (additionalFields.type) {
+							qs.type = additionalFields.type;
+						}
+						if (additionalFields.pageNumbers) {
+							qs.page_numbers = parseCsvList(additionalFields.pageNumbers).map((entry) =>
+								Number(entry),
+							);
+						}
+						if (additionalFields.elementsToRemove) {
+							qs.elementsToRemove = parseCsvList(additionalFields.elementsToRemove);
+						}
 
 						const options: IHttpRequestOptions = {
-							method: 'POST',
-							url: 'https://sources.graphorlm.com/elements',
-							body: {
-								file_name: fileName,
-							},
+							method: 'GET',
+							url: 'https://sources.graphorlm.com/get-elements',
+							qs,
 							json: true,
 						};
 
@@ -654,13 +1109,13 @@ export class Graphor implements INodeType {
 					}
 
 					if (operation === 'delete') {
-						const fileName = this.getNodeParameter('fileName', i) as string;
+						const fileId = this.getNodeParameter('fileId', i) as string;
 
 						const options: IHttpRequestOptions = {
 							method: 'DELETE',
 							url: 'https://sources.graphorlm.com/delete',
 							body: {
-								file_name: fileName,
+								file_id: fileId,
 							},
 							json: true,
 						};

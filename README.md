@@ -41,20 +41,19 @@ Both nodes can be used as tools with n8n AI Agents (like the AI Agent node with 
 ### Extraction
 - **Extract Data**: Extract structured data from documents using JSON Schema definitions
 
-### Flow
-- **List**: List all flows in your project
-- **Run**: Execute a deployed RAG flow with a query
-- **Deploy**: Deploy a flow to make it accessible via API
+### Retrieval
+- **Retrieve Chunks**: Retrieve relevant document chunks using semantic search for custom RAG workflows
 
 ### Source
 - **List**: List all sources in your project
-- **Upload File**: Upload a file (PDF, DOCX, images, audio, video)
-- **Upload From URL**: Ingest content from a web page URL
-- **Upload From GitHub**: Ingest content from a public GitHub repository
-- **Upload From YouTube**: Ingest content from a YouTube video
-- **Process**: Process a source with OCR/parsing (Basic, Hi-Res, Hi-Res FT, MAI, GraphorLM)
-- **Get Elements**: Get structured elements from a processed source
-- **Delete**: Delete a source from your project
+- **Upload File**: Ingest a file (PDF, DOCX, images, audio, video) and return a `build_id`
+- **Upload From URL**: Ingest content from a web page URL and return a `build_id`
+- **Upload From GitHub**: Ingest content from a public GitHub repository and return a `build_id`
+- **Upload From YouTube**: Ingest content from a YouTube video and return a `build_id`
+- **Get Build Status**: Poll an async ingest or reprocess build until it returns a `file_id`
+- **Process**: Reprocess an existing source by `file_id`
+- **Get Elements**: Get parsed elements from a processed source by `file_id`
+- **Delete**: Delete a source from your project by `file_id`
 
 ## Credentials
 
@@ -78,11 +77,10 @@ To use this node, you need a Graphor API token:
 
 | Method | Description |
 |--------|-------------|
-| **Basic** | Fast processing with heuristic classification |
-| **Hi-Res** | High resolution processing with advanced layout detection |
-| **Hi-Res FT** | Fine-tuned high resolution processing |
-| **MAI** | Multi-modal AI processing |
-| **GraphorLM** | Graphor proprietary processing method |
+| **Fast** | Fast processing with heuristic classification. No OCR. |
+| **Balanced** | OCR-based extraction with structure classification. |
+| **Accurate** | Fine-tuned model for highest accuracy. |
+| **Agentic** | Highest accuracy for complex layouts, tables, and diagrams. |
 
 ## Compatibility
 

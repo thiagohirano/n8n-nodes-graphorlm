@@ -65,7 +65,8 @@ export class GraphorNativeTool implements INodeType {
 						name: 'fileIds',
 						type: 'string',
 						default: '',
-						description: 'Comma-separated list of file IDs to restrict search to specific documents',
+						description:
+							'Comma-separated list of file IDs to restrict search to specific documents',
 					},
 					{
 						displayName: 'File Names (Deprecated)',
@@ -85,22 +86,25 @@ export class GraphorNativeTool implements INodeType {
 						displayName: 'Thinking Level',
 						name: 'thinkingLevel',
 						type: 'options',
-						default: 'balanced',
+						default: 'accurate',
 						options: [
 							{
 								name: 'Fast',
 								value: 'fast',
-								description: 'Uses a faster model without extended thinking. Best for simple questions where speed is prioritized.',
+								description:
+									'Uses a faster model without extended thinking. Best for simple questions where speed is prioritized.',
 							},
 							{
 								name: 'Balanced',
 								value: 'balanced',
-								description: 'Default. Uses a more capable model with low thinking. Good balance between quality and speed.',
+								description:
+									'Uses a more capable model with low thinking. Good balance between quality and speed.',
 							},
 							{
 								name: 'Accurate',
 								value: 'accurate',
-								description: 'Uses a more capable model with high thinking. Best for complex questions requiring deep reasoning.',
+								description:
+									'Default. Uses a more capable model with high thinking. Best for complex questions requiring deep reasoning.',
 							},
 						],
 						description: 'Controls model and thinking configuration',
@@ -117,13 +121,14 @@ export class GraphorNativeTool implements INodeType {
 		for (let i = 0; i < items.length; i++) {
 			try {
 				const question = this.getNodeParameter('question', i) as string;
-				const options = (this.getNodeParameter('options', i) as {
-					conversationId?: string;
-					fileIds?: string;
-					fileNames?: string;
-					reset?: boolean;
-					thinkingLevel?: string;
-				}) ?? {};
+				const options =
+					(this.getNodeParameter('options', i) as {
+						conversationId?: string;
+						fileIds?: string;
+						fileNames?: string;
+						reset?: boolean;
+						thinkingLevel?: string;
+					}) ?? {};
 
 				const body: IDataObject = { question };
 

@@ -15,11 +15,11 @@ describe('Graphor Node', () => {
 			expect(node.description.credentials).toEqual([{ name: 'graphorApi', required: true }]);
 		});
 
-		it('should define three resources', () => {
+		it('should define Graphor API resources', () => {
 			const resourceProp = node.description.properties.find((p) => p.name === 'resource');
 			expect(resourceProp).toBeDefined();
 			const values = (resourceProp!.options as { value: string }[]).map((o) => o.value);
-			expect(values).toEqual(['chat', 'extraction', 'source']);
+			expect(values).toEqual(['chat', 'extraction', 'retrieval', 'source']);
 		});
 
 		it('should have file_ids fields for chat', () => {
@@ -46,12 +46,24 @@ describe('Graphor Node', () => {
 			expect(values).not.toContain('flow');
 		});
 
-		it('should not have youtube upload operation', () => {
+		it('should have current source operations', () => {
 			const sourceOps = node.description.properties.find(
 				(p) => p.name === 'operation' && p.displayOptions?.show?.resource?.[0] === 'source',
 			);
 			const values = (sourceOps!.options as { value: string }[]).map((o) => o.value);
-			expect(values).not.toContain('uploadYoutube');
+			expect(values).toEqual(
+				expect.arrayContaining([
+					'getBuildStatus',
+					'delete',
+					'getElements',
+					'list',
+					'process',
+					'uploadFile',
+					'uploadGithub',
+					'uploadYoutube',
+					'uploadUrl',
+				]),
+			);
 		});
 	});
 
@@ -304,24 +316,28 @@ describe('Graphor Node', () => {
 	});
 
 	describe('Source - Upload URL', () => {
-		it('should POST url to /upload-url-source', async () => {
+		it('should POST url to /ingest-url', async () => {
 			const mockCtx = createMockExecuteFunctions({
 				nodeParameters: {
 					resource: 'source',
 					operation: 'uploadUrl',
 					url: 'https://example.com/page',
+					crawlUrls: true,
+					ingestMethod: 'balanced',
 				},
 			});
 
 			await node.execute.call(mockCtx as any);
 			const req = mockCtx.getRequests()[0];
-			expect(req.options.url).toBe('https://sources.graphorlm.com/upload-url-source');
+			expect(req.options.url).toBe('https://sources.graphorlm.com/ingest-url');
 			expect((req.options.body as any).url).toBe('https://example.com/page');
+			expect((req.options.body as any).crawlUrls).toBe(true);
+			expect((req.options.body as any).method).toBe('balanced');
 		});
 	});
 
 	describe('Source - Upload GitHub', () => {
-		it('should POST github url to /upload-github-source', async () => {
+		it('should POST github url to /ingest-github', async () => {
 			const mockCtx = createMockExecuteFunctions({
 				nodeParameters: {
 					resource: 'source',
@@ -332,45 +348,108 @@ describe('Graphor Node', () => {
 
 			await node.execute.call(mockCtx as any);
 			const req = mockCtx.getRequests()[0];
-			expect(req.options.url).toBe('https://sources.graphorlm.com/upload-github-source');
+			expect(req.options.url).toBe('https://sources.graphorlm.com/ingest-github');
 			expect((req.options.body as any).url).toBe('https://github.com/user/repo');
 		});
 	});
 
+	describe('Source - Upload YouTube', () => {
+		it('should POST youtube url to /ingest-youtube', async () => {
+			const mockCtx = createMockExecuteFunctions({
+				nodeParameters: {
+					resource: 'source',
+					operation: 'uploadYoutube',
+					youtubeUrl: 'https://www.youtube.com/watch?v=abc123',
+				},
+			});
+
+			await node.execute.call(mockCtx as any);
+			const req = mockCtx.getRequests()[0];
+			expect(req.options.url).toBe('https://sources.graphorlm.com/ingest-youtube');
+			expect((req.options.body as any).url).toBe('https://www.youtube.com/watch?v=abc123');
+		});
+	});
+
+	describe('Source - Get Build Status', () => {
+		it('should GET build status with query params', async () => {
+			const mockCtx = createMockExecuteFunctions({
+				nodeParameters: {
+					resource: 'source',
+					operation: 'getBuildStatus',
+					buildId: 'build-123',
+					buildStatusAdditionalFields: {
+						suppressElements: true,
+						suppressImgBase64: true,
+						page: 2,
+						pageSize: 25,
+					},
+				},
+			});
+
+			await node.execute.call(mockCtx as any);
+			const req = mockCtx.getRequests()[0];
+			expect(req.options.method).toBe('GET');
+			expect(req.options.url).toBe('https://sources.graphorlm.com/builds/build-123');
+			expect(req.options.qs).toEqual({
+				suppress_elements: true,
+				suppress_img_base64: true,
+				page: 2,
+				page_size: 25,
+			});
+		});
+	});
+
 	describe('Source - Process', () => {
-		it('should POST process with partition method', async () => {
+		it('should POST reprocess with file_id and method', async () => {
 			const mockCtx = createMockExecuteFunctions({
 				nodeParameters: {
 					resource: 'source',
 					operation: 'process',
-					fileName: 'report.pdf',
-					partitionMethod: 'hi_res',
+					fileId: 'file-123',
+					partitionMethod: 'agentic',
 				},
 			});
 
 			await node.execute.call(mockCtx as any);
 			const req = mockCtx.getRequests()[0];
-			expect(req.options.url).toBe('https://sources.graphorlm.com/process');
+			expect(req.options.url).toBe('https://sources.graphorlm.com/reprocess');
 			const body = req.options.body as any;
-			expect(body.file_name).toBe('report.pdf');
-			expect(body.partition_method).toBe('hi_res');
+			expect(body.file_id).toBe('file-123');
+			expect(body.method).toBe('agentic');
 		});
 	});
 
 	describe('Source - Get Elements', () => {
-		it('should POST to /elements', async () => {
+		it('should GET /get-elements with file_id and filters', async () => {
 			const mockCtx = createMockExecuteFunctions({
 				nodeParameters: {
 					resource: 'source',
 					operation: 'getElements',
-					fileName: 'report.pdf',
+					fileId: 'file-123',
+					getElementsAdditionalFields: {
+						type: 'Table',
+						elementsToRemove: 'Footer, PageNumber',
+						page: 3,
+						pageNumbers: '1, 2',
+						pageSize: 40,
+						suppressImgBase64: true,
+					},
 				},
 			});
 
 			await node.execute.call(mockCtx as any);
 			const req = mockCtx.getRequests()[0];
-			expect(req.options.url).toBe('https://sources.graphorlm.com/elements');
-			expect((req.options.body as any).file_name).toBe('report.pdf');
+			expect(req.options.method).toBe('GET');
+			expect(req.options.url).toBe('https://sources.graphorlm.com/get-elements');
+			expect(req.options.qs).toEqual({
+				file_id: 'file-123',
+				type: 'Table',
+				elementsToRemove: ['Footer', 'PageNumber'],
+				page: 3,
+				page_numbers: [1, 2],
+				page_size: 40,
+				suppress_img_base64: true,
+			});
 		});
 	});
 
@@ -380,7 +459,7 @@ describe('Graphor Node', () => {
 				nodeParameters: {
 					resource: 'source',
 					operation: 'delete',
-					fileName: 'old-file.pdf',
+					fileId: 'file-old',
 				},
 			});
 
@@ -388,7 +467,29 @@ describe('Graphor Node', () => {
 			const req = mockCtx.getRequests()[0];
 			expect(req.options.method).toBe('DELETE');
 			expect(req.options.url).toBe('https://sources.graphorlm.com/delete');
-			expect((req.options.body as any).file_name).toBe('old-file.pdf');
+			expect((req.options.body as any).file_id).toBe('file-old');
+		});
+	});
+
+	describe('Retrieval - Retrieve Chunks', () => {
+		it('should POST query to /prebuilt-rag', async () => {
+			const mockCtx = createMockExecuteFunctions({
+				nodeParameters: {
+					resource: 'retrieval',
+					operation: 'retrieveChunks',
+					query: 'payment terms',
+					retrievalAdditionalFields: { fileIds: 'file-1, file-2' },
+				},
+			});
+
+			await node.execute.call(mockCtx as any);
+			const req = mockCtx.getRequests()[0];
+			expect(req.options.method).toBe('POST');
+			expect(req.options.url).toBe('https://sources.graphorlm.com/prebuilt-rag');
+			expect(req.options.body).toEqual({
+				query: 'payment terms',
+				file_ids: ['file-1', 'file-2'],
+			});
 		});
 	});
 

@@ -28,6 +28,9 @@ credentials.json
 *.pem
 *.key
 
+# Local n8n E2E lab
+e2e/
+
 # Test coverage
 coverage/
 
