@@ -26,12 +26,11 @@ npm install n8n-nodes-graphorlm
 
 ## Nodes
 
-This package includes two nodes:
+This package includes one regular node:
 
 1. **Graphor** - Full-featured node with all operations
-2. **Graphor Tool** - Simplified node optimized for AI Agents
 
-Both nodes can be used as tools with n8n AI Agents (like the AI Agent node with OpenAI, Anthropic, etc.)
+The Graphor node can be used as a tool with n8n AI Agents (like the AI Agent node with OpenAI, Anthropic, etc.).
 
 ## Operations
 

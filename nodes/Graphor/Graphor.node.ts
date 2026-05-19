@@ -77,6 +77,7 @@ export class Graphor implements INodeType {
 		},
 		inputs: ['main'],
 		outputs: ['main'],
+		usableAsTool: true,
 		credentials: [
 			{
 				name: 'graphorApi',

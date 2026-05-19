@@ -13,6 +13,7 @@ describe('Graphor Node', () => {
 			expect(node.description.name).toBe('graphor');
 			expect(node.description.displayName).toBe('Graphor');
 			expect(node.description.credentials).toEqual([{ name: 'graphorApi', required: true }]);
+			expect((node.description as any).usableAsTool).toBe(true);
 		});
 
 		it('should define Graphor API resources', () => {
