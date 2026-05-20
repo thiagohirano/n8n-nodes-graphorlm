@@ -1,0 +1,273 @@
+{
+  "id": "graphor-gemini-agent-e2e-main-tool",
+  "name": "VERIFY - AI Agent + Graphor Tool",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "manual-trigger",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "function pdfText(str) {\n  return String(str).replace(/\\\\/g, '\\\\\\\\').replace(/\\(/g, '\\\\(').replace(/\\)/g, '\\\\)');\n}\nconst textLines = [\n  'Invoice: INV-GEMINI-AGENT-001',\n  'Vendor: Graphor Gemini Vendor',\n  'Customer: n8n AI Agent Lab',\n  'Payment terms: Net 30',\n  'Total due: 987.65 USD',\n];\nconst content = [\n  'BT', '/F1 12 Tf', '72 720 Td',\n  ...textLines.flatMap((line, index) => [index === 0 ? null : '0 -18 Td', '(' + pdfText(line) + ') Tj']).filter(Boolean),\n  'ET',\n].join('\\n');\nconst objects = [\n  '1 0 obj\\n<< /Type /Catalog /Pages 2 0 R >>\\nendobj\\n',\n  '2 0 obj\\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\\nendobj\\n',\n  '3 0 obj\\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>\\nendobj\\n',\n  '4 0 obj\\n<< /Length ' + Buffer.byteLength(content) + ' >>\\nstream\\n' + content + '\\nendstream\\nendobj\\n',\n  '5 0 obj\\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\\nendobj\\n',\n];\nlet pdf = '%PDF-1.4\\n';\nconst offsets = [0];\nfor (const obj of objects) { offsets.push(Buffer.byteLength(pdf)); pdf += obj; }\nconst xrefOffset = Buffer.byteLength(pdf);\npdf += 'xref\\n0 6\\n0000000000 65535 f \\n';\nfor (let i = 1; i <= 5; i++) pdf += String(offsets[i]).padStart(10, '0') + ' 00000 n \\n';\npdf += 'trailer\\n<< /Size 6 /Root 1 0 R >>\\nstartxref\\n' + xrefOffset + '\\n%%EOF\\n';\nreturn [{\n  json: { fixture: 'gemini-agent-pdf' },\n  binary: { data: { data: Buffer.from(pdf, 'binary').toString('base64'), mimeType: 'application/pdf', fileName: 'gemini-agent-invoice.pdf', fileExtension: 'pdf' } },\n}];"
+      },
+      "id": "make-pdf-fixture",
+      "name": "Make PDF Fixture",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "source",
+        "operation": "uploadFile",
+        "binaryPropertyName": "data",
+        "ingestMethod": "fast"
+      },
+      "id": "upload-pdf",
+      "name": "Upload PDF",
+      "type": "n8n-nodes-graphorlm.graphor",
+      "typeVersion": 1,
+      "position": [
+        500,
+        0
+      ],
+      "credentials": {
+        "graphorApi": {
+          "id": "graphor-e2e-credential",
+          "name": "Graphor E2E"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "await new Promise((resolve) => setTimeout(resolve, 60000)); return items;"
+      },
+      "id": "wait-build",
+      "name": "Wait For Build",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        760,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "source",
+        "operation": "getBuildStatus",
+        "buildId": "={{ $json.build_id }}",
+        "buildStatusAdditionalFields": {
+          "suppressElements": true,
+          "suppressImgBase64": true
+        }
+      },
+      "id": "get-build-status",
+      "name": "Get Build Status",
+      "type": "n8n-nodes-graphorlm.graphor",
+      "typeVersion": 1,
+      "position": [
+        1020,
+        0
+      ],
+      "credentials": {
+        "graphorApi": {
+          "id": "graphor-e2e-credential",
+          "name": "Graphor E2E"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ 'Use the Graphor tool exactly once to answer this. For file_id ' + $('Get Build Status').item.json.file_id + ', what is the invoice number, total due, currency, and payment terms? Return only a concise bullet list.' }}",
+        "hasOutputParser": false,
+        "needsFallback": false,
+        "options": {
+          "systemMessage": "You are testing a Graphor n8n tool integration. You must call the Graphor tool when asked about document content. Do not answer from memory.",
+          "enableStreaming": false
+        }
+      },
+      "id": "ai-agent",
+      "name": "Gemini AI Agent + Graphor Tool",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        1320,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1.1,
+      "position": [
+        1120,
+        300
+      ],
+      "id": "google-gemini-chat-model",
+      "name": "Google Gemini Chat Model",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "google-ai-studio-e2e",
+          "name": "Google AI Studio E2E"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Ask Graphor questions about the currently ingested invoice PDF. Use this tool for invoice number, amount, currency, payment terms, and source-grounded document answers.",
+        "resource": "chat",
+        "operation": "askQuestion",
+        "question": "={{ $fromAI('question', 'Question to ask Graphor about the invoice PDF', 'string') }}",
+        "additionalFields": {
+          "fileIds": "={{ $('Get Build Status').item.json.file_id }}",
+          "thinkingLevel": "fast"
+        }
+      },
+      "id": "graphor-native-tool",
+      "name": "Graphor Tool (Generated)",
+      "type": "n8n-nodes-graphorlm.graphorTool",
+      "typeVersion": 1,
+      "position": [
+        1500,
+        300
+      ],
+      "credentials": {
+        "graphorApi": {
+          "id": "graphor-e2e-credential",
+          "name": "Graphor E2E"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "source",
+        "operation": "delete",
+        "fileId": "={{ $('Get Build Status').item.json.file_id }}"
+      },
+      "id": "delete-source",
+      "name": "Delete Source",
+      "type": "n8n-nodes-graphorlm.graphor",
+      "typeVersion": 1,
+      "position": [
+        1620,
+        0
+      ],
+      "credentials": {
+        "graphorApi": {
+          "id": "graphor-e2e-credential",
+          "name": "Graphor E2E"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Make PDF Fixture",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Make PDF Fixture": {
+      "main": [
+        [
+          {
+            "node": "Upload PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload PDF": {
+      "main": [
+        [
+          {
+            "node": "Wait For Build",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait For Build": {
+      "main": [
+        [
+          {
+            "node": "Get Build Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Build Status": {
+      "main": [
+        [
+          {
+            "node": "Gemini AI Agent + Graphor Tool",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini AI Agent + Graphor Tool": {
+      "main": [
+        [
+          {
+            "node": "Delete Source",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Gemini AI Agent + Graphor Tool",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Graphor Tool (Generated)": {
+      "ai_tool": [
+        [
+          {
+            "node": "Gemini AI Agent + Graphor Tool",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "createdAt": "2026-04-27T18:49:24.114Z",
+  "updatedAt": "2026-04-27T18:49:24.114Z"
+}

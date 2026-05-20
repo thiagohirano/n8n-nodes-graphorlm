@@ -28,8 +28,11 @@ credentials.json
 *.pem
 *.key
 
-# Local n8n E2E lab
-e2e/
+# Local n8n E2E lab secrets and runtime
+e2e/.env
+e2e/.env.*
+!e2e/.env.example
+e2e/.runtime/
 
 # Test coverage
 coverage/

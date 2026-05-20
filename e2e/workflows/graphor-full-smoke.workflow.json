@@ -1,0 +1,437 @@
+{
+  "name": "VERIFY - Graphor Full Smoke",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "manual-trigger",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const text = `Invoice: INV-N8N-E2E-001\\nVendor: Graphor Test Vendor\\nCustomer: n8n E2E Lab\\nPayment terms: Net 15\\nTotal due: 130.00 USD\\n`; return [{ json: { fixture: 'invoice-smoke' }, binary: { data: { data: Buffer.from(text).toString('base64'), mimeType: 'text/plain', fileName: 'invoice-smoke.txt', fileExtension: 'txt' } } }];"
+      },
+      "id": "make-fixture",
+      "name": "Make Fixture",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "source",
+        "operation": "uploadFile",
+        "binaryPropertyName": "data",
+        "ingestMethod": "fast"
+      },
+      "id": "upload-file",
+      "name": "Upload File",
+      "type": "n8n-nodes-graphorlm.graphor",
+      "typeVersion": 1,
+      "position": [
+        460,
+        0
+      ],
+      "credentials": {
+        "graphorApi": {
+          "id": "graphor-e2e-credential",
+          "name": "Graphor E2E"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "await new Promise((resolve) => setTimeout(resolve, 25000)); return items;"
+      },
+      "id": "wait-build",
+      "name": "Wait For Build",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        700,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "source",
+        "operation": "getBuildStatus",
+        "buildId": "={{ $json.build_id }}",
+        "buildStatusAdditionalFields": {
+          "suppressElements": true,
+          "suppressImgBase64": true
+        }
+      },
+      "id": "get-build-status",
+      "name": "Get Build Status",
+      "type": "n8n-nodes-graphorlm.graphor",
+      "typeVersion": 1,
+      "position": [
+        940,
+        0
+      ],
+      "credentials": {
+        "graphorApi": {
+          "id": "graphor-e2e-credential",
+          "name": "Graphor E2E"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "source",
+        "operation": "list"
+      },
+      "id": "list-sources",
+      "name": "List Sources",
+      "type": "n8n-nodes-graphorlm.graphor",
+      "typeVersion": 1,
+      "position": [
+        1180,
+        -240
+      ],
+      "credentials": {
+        "graphorApi": {
+          "id": "graphor-e2e-credential",
+          "name": "Graphor E2E"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "source",
+        "operation": "getElements",
+        "fileId": "={{ $('Get Build Status').item.json.file_id }}",
+        "getElementsAdditionalFields": {
+          "page": 1,
+          "pageSize": 10,
+          "suppressImgBase64": true
+        }
+      },
+      "id": "get-elements",
+      "name": "Get Elements",
+      "type": "n8n-nodes-graphorlm.graphor",
+      "typeVersion": 1,
+      "position": [
+        1180,
+        0
+      ],
+      "credentials": {
+        "graphorApi": {
+          "id": "graphor-e2e-credential",
+          "name": "Graphor E2E"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "chat",
+        "operation": "askQuestion",
+        "question": "What is the invoice number, total due, and payment term?",
+        "additionalFields": {
+          "fileIds": "={{ $('Get Build Status').item.json.file_id }}",
+          "thinkingLevel": "fast"
+        }
+      },
+      "id": "ask",
+      "name": "Ask",
+      "type": "n8n-nodes-graphorlm.graphor",
+      "typeVersion": 1,
+      "position": [
+        1420,
+        0
+      ],
+      "credentials": {
+        "graphorApi": {
+          "id": "graphor-e2e-credential",
+          "name": "Graphor E2E"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "extraction",
+        "operation": "extractData",
+        "fileIds": "={{ $('Get Build Status').item.json.file_id }}",
+        "fileNames": "",
+        "userInstruction": "Extract invoice number, payment terms, total amount, and currency.",
+        "outputSchema": "{\"type\":\"object\",\"properties\":{\"invoice_number\":{\"type\":[\"string\",\"null\"]},\"payment_terms\":{\"type\":[\"string\",\"null\"]},\"total_amount\":{\"type\":[\"number\",\"null\"]},\"currency\":{\"type\":[\"string\",\"null\"]}}}",
+        "thinkingLevel": "fast"
+      },
+      "id": "extract",
+      "name": "Extract",
+      "type": "n8n-nodes-graphorlm.graphor",
+      "typeVersion": 1,
+      "position": [
+        1660,
+        0
+      ],
+      "credentials": {
+        "graphorApi": {
+          "id": "graphor-e2e-credential",
+          "name": "Graphor E2E"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "retrieval",
+        "operation": "retrieveChunks",
+        "query": "payment terms",
+        "retrievalAdditionalFields": {
+          "fileIds": "={{ $('Get Build Status').item.json.file_id }}"
+        }
+      },
+      "id": "retrieve-chunks",
+      "name": "Retrieve Chunks",
+      "type": "n8n-nodes-graphorlm.graphor",
+      "typeVersion": 1,
+      "position": [
+        1900,
+        0
+      ],
+      "credentials": {
+        "graphorApi": {
+          "id": "graphor-e2e-credential",
+          "name": "Graphor E2E"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "source",
+        "operation": "process",
+        "fileId": "={{ $('Get Build Status').item.json.file_id }}",
+        "partitionMethod": "fast"
+      },
+      "id": "reprocess",
+      "name": "Reprocess",
+      "type": "n8n-nodes-graphorlm.graphor",
+      "typeVersion": 1,
+      "position": [
+        2140,
+        0
+      ],
+      "credentials": {
+        "graphorApi": {
+          "id": "graphor-e2e-credential",
+          "name": "Graphor E2E"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "await new Promise((resolve) => setTimeout(resolve, 25000)); return items;"
+      },
+      "id": "wait-reprocess",
+      "name": "Wait For Reprocess",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2380,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "source",
+        "operation": "getBuildStatus",
+        "buildId": "={{ $json.build_id }}",
+        "buildStatusAdditionalFields": {
+          "suppressElements": true,
+          "suppressImgBase64": true
+        }
+      },
+      "id": "get-reprocess-status",
+      "name": "Get Reprocess Status",
+      "type": "n8n-nodes-graphorlm.graphor",
+      "typeVersion": 1,
+      "position": [
+        2620,
+        0
+      ],
+      "credentials": {
+        "graphorApi": {
+          "id": "graphor-e2e-credential",
+          "name": "Graphor E2E"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "source",
+        "operation": "delete",
+        "fileId": "={{ $('Get Build Status').item.json.file_id }}"
+      },
+      "id": "delete-source",
+      "name": "Delete Source",
+      "type": "n8n-nodes-graphorlm.graphor",
+      "typeVersion": 1,
+      "position": [
+        2860,
+        0
+      ],
+      "credentials": {
+        "graphorApi": {
+          "id": "graphor-e2e-credential",
+          "name": "Graphor E2E"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Make Fixture",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Make Fixture": {
+      "main": [
+        [
+          {
+            "node": "Upload File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload File": {
+      "main": [
+        [
+          {
+            "node": "Wait For Build",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait For Build": {
+      "main": [
+        [
+          {
+            "node": "Get Build Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Build Status": {
+      "main": [
+        [
+          {
+            "node": "List Sources",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get Elements",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Elements": {
+      "main": [
+        [
+          {
+            "node": "Ask",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ask": {
+      "main": [
+        [
+          {
+            "node": "Extract",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract": {
+      "main": [
+        [
+          {
+            "node": "Retrieve Chunks",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Retrieve Chunks": {
+      "main": [
+        [
+          {
+            "node": "Reprocess",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reprocess": {
+      "main": [
+        [
+          {
+            "node": "Wait For Reprocess",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait For Reprocess": {
+      "main": [
+        [
+          {
+            "node": "Get Reprocess Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Reprocess Status": {
+      "main": [
+        [
+          {
+            "node": "Delete Source",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "id": "graphor-e2e-smoke",
+  "versionId": "graphor-e2e-smoke-version-1",
+  "createdAt": "2026-04-27T16:45:29.550Z",
+  "updatedAt": "2026-04-27T16:52:39.690Z"
+}

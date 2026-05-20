@@ -1,0 +1,11 @@
+Invoice: INV-E2E-001
+Vendor: Graphor Test Vendor
+Customer: n8n E2E Lab
+Invoice date: 2026-04-27
+Payment terms: Net 15
+Currency: USD
+Subtotal: 120.50
+Tax: 9.50
+Total due: 130.00
+
+This file is intentionally small. It is useful for upload, build status, chat, extraction, get elements, reprocess, and delete checks. Retrieval can return zero chunks for very small fixtures.
