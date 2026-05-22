@@ -114,7 +114,8 @@
         "getElementsAdditionalFields": {
           "page": 1,
           "pageSize": 10,
-          "suppressImgBase64": true
+          "suppressImgBase64": true,
+          "elementsToRemove": "Footer, PageNumber"
         }
       },
       "id": "get-elements",
@@ -286,6 +287,88 @@
           "name": "Graphor E2E"
         }
       }
+    },
+    {
+      "parameters": {
+        "resource": "source",
+        "operation": "uploadUrl",
+        "url": "https://example.com/",
+        "crawlUrls": true,
+        "ingestMethod": "fast"
+      },
+      "id": "upload-url",
+      "name": "Upload URL",
+      "type": "n8n-nodes-graphorlm.graphor",
+      "typeVersion": 1,
+      "position": [
+        3100,
+        0
+      ],
+      "credentials": {
+        "graphorApi": {
+          "id": "graphor-e2e-credential",
+          "name": "Graphor E2E"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "await new Promise((resolve) => setTimeout(resolve, 30000)); return items;"
+      },
+      "id": "wait-url-build",
+      "name": "Wait For URL Build",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3340,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "source",
+        "operation": "getBuildStatus",
+        "buildId": "={{ $json.build_id }}",
+        "buildStatusAdditionalFields": {
+          "suppressElements": true,
+          "suppressImgBase64": true
+        }
+      },
+      "id": "get-url-build-status",
+      "name": "Get URL Build Status",
+      "type": "n8n-nodes-graphorlm.graphor",
+      "typeVersion": 1,
+      "position": [
+        3580,
+        0
+      ],
+      "credentials": {
+        "graphorApi": {
+          "id": "graphor-e2e-credential",
+          "name": "Graphor E2E"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "source",
+        "operation": "delete",
+        "fileId": "={{ $('Get URL Build Status').item.json.file_id }}"
+      },
+      "id": "delete-url-source",
+      "name": "Delete URL Source",
+      "type": "n8n-nodes-graphorlm.graphor",
+      "typeVersion": 1,
+      "position": [
+        3820,
+        0
+      ],
+      "credentials": {
+        "graphorApi": {
+          "id": "graphor-e2e-credential",
+          "name": "Graphor E2E"
+        }
+      }
     }
   ],
   "connections": {
@@ -420,6 +503,50 @@
         [
           {
             "node": "Delete Source",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Delete Source": {
+      "main": [
+        [
+          {
+            "node": "Upload URL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload URL": {
+      "main": [
+        [
+          {
+            "node": "Wait For URL Build",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait For URL Build": {
+      "main": [
+        [
+          {
+            "node": "Get URL Build Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get URL Build Status": {
+      "main": [
+        [
+          {
+            "node": "Delete URL Source",
             "type": "main",
             "index": 0
           }

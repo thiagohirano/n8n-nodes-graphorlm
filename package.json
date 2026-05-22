@@ -1,6 +1,6 @@
 {
   "name": "n8n-nodes-graphorlm",
-  "version": "0.1.27",
+  "version": "0.1.28",
   "description": "n8n community nodes for Graphor - Intelligent document processing, RAG pipelines, and document chat API",
   "keywords": [
     "n8n-community-node-package",

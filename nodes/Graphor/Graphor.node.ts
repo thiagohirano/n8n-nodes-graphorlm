@@ -951,7 +951,7 @@ export class Graphor implements INodeType {
 						const crawlUrls = this.getNodeParameter('crawlUrls', i) as boolean;
 						const ingestMethod = this.getNodeParameter('ingestMethod', i) as string;
 
-						const body: IDataObject = { url, crawlUrls };
+						const body: IDataObject = { url, crawl_urls: crawlUrls };
 						if (ingestMethod) {
 							body.method = ingestMethod;
 						}
@@ -1092,7 +1092,7 @@ export class Graphor implements INodeType {
 							);
 						}
 						if (additionalFields.elementsToRemove) {
-							qs.elementsToRemove = parseCsvList(additionalFields.elementsToRemove);
+							qs.elements_to_remove = parseCsvList(additionalFields.elementsToRemove);
 						}
 
 						const options: IHttpRequestOptions = {

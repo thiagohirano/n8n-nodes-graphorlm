@@ -332,7 +332,8 @@ describe('Graphor Node', () => {
 			const req = mockCtx.getRequests()[0];
 			expect(req.options.url).toBe('https://sources.graphorlm.com/ingest-url');
 			expect((req.options.body as any).url).toBe('https://example.com/page');
-			expect((req.options.body as any).crawlUrls).toBe(true);
+			expect((req.options.body as any).crawl_urls).toBe(true);
+			expect((req.options.body as any).crawlUrls).toBeUndefined();
 			expect((req.options.body as any).method).toBe('balanced');
 		});
 	});
@@ -445,7 +446,7 @@ describe('Graphor Node', () => {
 			expect(req.options.qs).toEqual({
 				file_id: 'file-123',
 				type: 'Table',
-				elementsToRemove: ['Footer', 'PageNumber'],
+				elements_to_remove: ['Footer', 'PageNumber'],
 				page: 3,
 				page_numbers: [1, 2],
 				page_size: 40,
